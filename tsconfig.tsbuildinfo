@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/PaperInput.tsx","./src/components/PaperOutline.tsx","./src/components/SectionSummary.tsx","./src/components/SummaryView.tsx","./src/hooks/useLLM.ts","./src/hooks/useOPFS.ts","./src/types/index.ts","./src/workers/llm.worker.ts"],"version":"5.9.3"}
