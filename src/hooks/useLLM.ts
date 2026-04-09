@@ -4,6 +4,8 @@ export function useLLM() {
   const workerRef = useRef<Worker | null>(null)
   const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [initProgress, setInitProgress] = useState<string>('')
+  const [initLoadingPercent, setInitLoadingPercent] = useState(0)
 
   useEffect(() => {
     // Initialize worker
@@ -14,17 +16,36 @@ export function useLLM() {
       )
 
       workerRef.current.onmessage = (event) => {
-        if (event.data.type === 'init-complete') {
-          setInitialized(true)
-        } else if (event.data.type === 'error') {
-          setError(event.data.error)
+        const { type, message, progress, error: workerError } = event.data
+
+        switch (type) {
+          case 'init-progress':
+            setInitProgress(message || '')
+            if (progress !== undefined) {
+              setInitLoadingPercent(progress)
+            }
+            break
+
+          case 'init-complete':
+            setInitialized(true)
+            setInitProgress('Model ready!')
+            break
+
+          case 'error':
+            setError(workerError || 'Worker error')
+            break
         }
       }
 
+      workerRef.current.onerror = (event) => {
+        console.error('Worker error:', event)
+        setError(`Worker error: ${event.message}`)
+      }
+
       // Initialize the model
+      setInitProgress('Initializing model...')
       workerRef.current.postMessage({
-        type: 'init',
-        modelUrl: '/models/qwen-2.5-1.5b.gguf'
+        type: 'init'
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize worker')
@@ -41,10 +62,24 @@ export function useLLM() {
         throw new Error('Worker not initialized')
       }
 
+      if (!initialized) {
+        throw new Error('Model is still loading. Please wait...')
+      }
+
       return new Promise((resolve, reject) => {
-        const handler = (event: MessageEvent) => {
+        const timeout = setTimeout(() => {
+          handler()
+          reject(new Error('Summarization timeout'))
+        }, 60000) // 60 second timeout
+
+        const handler = () => {
+          clearTimeout(timeout)
+          workerRef.current?.removeEventListener('message', listener)
+        }
+
+        const listener = (event: MessageEvent) => {
           if (event.data.sectionId === sectionId) {
-            workerRef.current?.removeEventListener('message', handler)
+            handler()
             if (event.data.type === 'summary-complete') {
               resolve(event.data.summary)
             } else if (event.data.type === 'error') {
@@ -53,7 +88,7 @@ export function useLLM() {
           }
         }
 
-        workerRef.current?.addEventListener('message', handler)
+        workerRef.current?.addEventListener('message', listener)
         workerRef.current?.postMessage({
           type: 'summarize',
           text,
@@ -61,8 +96,14 @@ export function useLLM() {
         })
       })
     },
-    []
+    [initialized]
   )
 
-  return { initialized, error, summarize }
+  return {
+    initialized,
+    error,
+    initProgress,
+    initLoadingPercent,
+    summarize
+  }
 }

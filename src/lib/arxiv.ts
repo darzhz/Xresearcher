@@ -2,7 +2,6 @@ import type { ArxivMetadata, ArxivSearchParams } from '../types'
 
 const ARXIV_API = 'https://export.arxiv.org/api/query?'
 const CORS_PROXIES = [
-  'https://api.allorigins.win/get?url=',
   'https://corsproxy.io/?',
 ]
 
@@ -108,7 +107,7 @@ function parseAtomFeed(xmlText: string): ArxivMetadata[] {
       const pdfLink = entry.querySelector('link[title="pdf"]')
       const pdfUrl = pdfLink?.getAttribute('href') || ''
 
-      const htmlUrl = `https://ar5iv.org/html/${id}`
+      const htmlUrl = `https://arxiv.org/html/${id}`
 
       if (id) {
         papers.push({
@@ -212,7 +211,7 @@ export async function fetchDailyFeed(
  * Fetch paper HTML from ar5iv and parse it into PaperData.
  */
 export async function fetchAr5ivPaper(arxivId: string) {
-  const ar5ivUrl = `https://ar5iv.org/html/${arxivId}`
+  const ar5ivUrl = `https://arxiv.org/html/${arxivId}`
 
   let response: Response
   try {

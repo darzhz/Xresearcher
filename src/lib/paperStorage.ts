@@ -109,7 +109,7 @@ export async function loadPaperFromOPFS(id: string): Promise<PaperData | null> {
       title,
       authors: [],
       sections,
-      url: `https://ar5iv.org/html/${id}`,
+      url: `https://arxiv.org/html/${id}`,
       fetchedAt: new Date()
     }
   } catch (error) {

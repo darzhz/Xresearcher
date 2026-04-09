@@ -64,8 +64,19 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Ensure workers are built as ES modules
+        format: 'es'
+      }
+    }
+  },
   server: {
     port: 5173,
     open: true
+  },
+  worker: {
+    format: 'es'
   }
 })

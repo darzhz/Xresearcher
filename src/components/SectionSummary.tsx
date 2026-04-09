@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Section } from '../types'
+import { useLLM } from '../hooks/useLLM'
 
 interface SectionSummaryProps {
   section: Section
@@ -8,21 +9,28 @@ interface SectionSummaryProps {
 }
 
 export function SectionSummary({ section, isExpanded, onToggle }: SectionSummaryProps) {
+  const { initialized, error: llmError, summarize } = useLLM()
   const [summary, setSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const generateSummary = async () => {
     if (summary) return
 
+    if (!initialized) {
+      setError('Model is still loading. Please wait...')
+      return
+    }
+
     setLoading(true)
+    setError(null)
     try {
-      // TODO: Integrate wllama worker for actual LLM-powered summarization
-      // For now, create a placeholder
-      const placeholder = `This section discusses the topic: "${section.title}". [LLM summary will be generated here once wllama is integrated]`
-      setSummary(placeholder)
-    } catch (error) {
-      console.error('Failed to generate summary:', error)
+      const result = await summarize(section.content, section.id)
+      setSummary(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate summary')
+      console.error('Failed to generate summary:', err)
     } finally {
       setLoading(false)
     }
@@ -77,6 +85,29 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
 
       {isExpanded && (
         <div className="border-t border-gray-200 px-6 py-4 space-y-4">
+          {/* LLM initialization status */}
+          {!initialized && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-700">
+                Loading AI model... This only happens once.
+              </p>
+            </div>
+          )}
+
+          {/* Error messages */}
+          {llmError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">{llmError}</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          {/* Summary display */}
           {summary ? (
             <div className="space-y-3">
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
@@ -96,10 +127,10 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
           ) : (
             <button
               onClick={generateSummary}
-              disabled={loading}
+              disabled={loading || !initialized || !!llmError}
               className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-400 transition-colors"
             >
-              {loading ? 'Summarizing...' : 'Generate Summary'}
+              {loading ? '⏳ Summarizing...' : 'Generate Summary'}
             </button>
           )}
         </div>

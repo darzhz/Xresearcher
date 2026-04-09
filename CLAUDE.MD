@@ -23,7 +23,7 @@ Here is the structured Project Manifest for your **Local-First Research Summariz
 
 ### 1. The Data Pipeline (HTML-First)
 Instead of fighting `pdf.js` layout heuristics, the app prioritizes the **ar5iv** mirror.
-* **Primary:** `https://ar5iv.org/html/{id}` -> Extract sections via `querySelectorAll('section')`.
+* **Primary:** `https://arxiv.org/html/{id}` -> Extract sections via `querySelectorAll('section')`.
 * **Fallback:** Standard PDF view (for papers not yet converted).
 
 ### 2. The Inference Worker (Stable Local AI)
