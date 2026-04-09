@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { X, Plus } from 'lucide-react'
 
 const COMMON_CATEGORIES = [
   'cs.AI',
@@ -36,25 +37,30 @@ export function CategoryPicker({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Select Interest Categories</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="backdrop-blur-xl bg-gradient-to-br from-slate-900/80 via-blue-900/40 to-slate-900/80 border border-cyan-500/30 rounded-2xl p-6 max-w-2xl w-full max-h-96 overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-300 to-purple-400 bg-clip-text text-transparent">
+            Select Interest Categories
+          </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-cyan-400 hover:text-cyan-300 transition-colors"
           >
-            ✕
+            <X size={24} />
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           {/* Common categories */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Common Categories</h3>
+            <h3 className="text-sm font-semibold text-cyan-300 mb-3">Popular Categories</h3>
             <div className="grid grid-cols-2 gap-2">
               {COMMON_CATEGORIES.map(cat => (
-                <label key={cat} className="flex items-center">
+                <label
+                  key={cat}
+                  className="flex items-center p-3 bg-white/5 border border-cyan-500/20 rounded-lg hover:bg-white/10 hover:border-cyan-500/40 cursor-pointer transition-all duration-300"
+                >
                   <input
                     type="checkbox"
                     checked={selectedCategories.includes(cat)}
@@ -65,9 +71,9 @@ export function CategoryPicker({
                         onRemove(cat)
                       }
                     }}
-                    className="w-4 h-4 text-indigo-600 rounded"
+                    className="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
                   />
-                  <span className="ml-2 text-sm text-gray-700">{cat}</span>
+                  <span className="ml-2 text-sm text-cyan-100">{cat}</span>
                 </label>
               ))}
             </div>
@@ -75,7 +81,7 @@ export function CategoryPicker({
 
           {/* Custom category input */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Custom Category</h3>
+            <h3 className="text-sm font-semibold text-cyan-300 mb-3">Custom Category</h3>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -83,12 +89,13 @@ export function CategoryPicker({
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAddCustom()}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 border border-cyan-500/30 bg-white/5 text-cyan-100 placeholder-cyan-300/50 rounded-lg focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20"
               />
               <button
                 onClick={handleAddCustom}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white rounded-lg font-medium transition-all duration-300 flex items-center gap-2"
               >
+                <Plus size={18} />
                 Add
               </button>
             </div>
@@ -97,19 +104,19 @@ export function CategoryPicker({
           {/* Selected categories */}
           {selectedCategories.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Selected</h3>
+              <h3 className="text-sm font-semibold text-cyan-300 mb-3">Selected ({selectedCategories.length})</h3>
               <div className="flex flex-wrap gap-2">
                 {selectedCategories.map(cat => (
                   <span
                     key={cat}
-                    className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-cyan-300 rounded-full text-sm hover:border-cyan-500/50 transition-all duration-300"
                   >
                     {cat}
                     <button
                       onClick={() => onRemove(cat)}
-                      className="hover:text-indigo-900"
+                      className="text-cyan-400 hover:text-red-400 transition-colors"
                     >
-                      ✕
+                      <X size={14} />
                     </button>
                   </span>
                 ))}
@@ -121,7 +128,7 @@ export function CategoryPicker({
         <div className="mt-6 flex gap-2 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50"
           >
             Done
           </button>

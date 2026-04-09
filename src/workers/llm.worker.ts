@@ -5,15 +5,20 @@ interface MessageData {
   type: 'init' | 'summarize'
   text?: string
   sectionId?: string
+  modelId?: string
+  filename?: string
 }
 
 let wllama: any = null
 let modelLoaded = false
 
 /**
- * Initialize wllama and load the Qwen model from Hugging Face.
+ * Initialize wllama and load a model from Hugging Face.
  */
-async function initializeModel(): Promise<void> {
+async function initializeModel(
+  modelId: string = 'Qwen/Qwen2.5-1.5B-Instruct-GGUF',
+  filename: string = 'qwen2.5-1.5b-instruct-q4_k_m.gguf'
+): Promise<void> {
   if (modelLoaded) return
 
   try {
@@ -37,11 +42,11 @@ async function initializeModel(): Promise<void> {
     // Report progress as model loads
     self.postMessage({
       type: 'init-progress',
-      message: 'Downloading model from Hugging Face (~1.1GB)...'
+      message: `Downloading model from Hugging Face...`
     })
 
-    // Load Qwen 2.5 1.5B Q4 model from Hugging Face
-    await wllama.loadModelFromHF('Qwen/Qwen2.5-1.5B-Instruct-GGUF', 'qwen2.5-1.5b-instruct-q4_k_m.gguf')
+    // Load model from Hugging Face with user-selected repo and filename
+    await wllama.loadModelFromHF(modelId, filename)
 
     self.postMessage({
       type: 'init-progress',
@@ -93,12 +98,12 @@ Summary:`
  * Main message handler
  */
 self.onmessage = async (event: MessageEvent<MessageData>) => {
-  const { type, text, sectionId } = event.data
+  const { type, text, sectionId, modelId, filename } = event.data
 
   try {
     switch (type) {
       case 'init':
-        await initializeModel()
+        await initializeModel(modelId, filename)
         self.postMessage({ type: 'init-complete' })
         break
 

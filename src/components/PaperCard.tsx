@@ -1,3 +1,4 @@
+import { Bookmark, BookmarkCheck, HardDrive } from 'lucide-react'
 import type { ArxivMetadata } from '../types'
 
 interface PaperCardProps {
@@ -23,20 +24,20 @@ export function PaperCard({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-lg transition-shadow">
+    <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl p-5 hover:border-cyan-500/40 transition-all duration-300 hover:bg-white/10">
       <div className="space-y-3">
         {/* Title */}
-        <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 hover:text-indigo-600">
+        <h3 className="text-lg font-semibold text-cyan-100 line-clamp-2 hover:text-cyan-300 transition-colors">
           {paper.title}
         </h3>
 
         {/* Authors and Date */}
-        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-cyan-300/70">
           <span>
             {paper.authors.slice(0, 3).join(', ')}
             {paper.authors.length > 3 && ` +${paper.authors.length - 3}`}
           </span>
-          {paper.published && <span className="text-gray-400">•</span>}
+          {paper.published && <span className="text-cyan-500/50">•</span>}
           {paper.published && <span>{paper.published}</span>}
         </div>
 
@@ -46,13 +47,13 @@ export function PaperCard({
             {paper.categories.slice(0, 3).map(cat => (
               <span
                 key={cat}
-                className="inline-block px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded"
+                className="inline-block px-2 py-1 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-cyan-300 text-xs rounded-md"
               >
                 {cat}
               </span>
             ))}
             {paper.categories.length > 3 && (
-              <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+              <span className="inline-block px-2 py-1 bg-white/5 border border-cyan-500/20 text-cyan-300/60 text-xs rounded-md">
                 +{paper.categories.length - 3}
               </span>
             )}
@@ -60,20 +61,22 @@ export function PaperCard({
         )}
 
         {/* Abstract/Summary */}
-        <p className="text-sm text-gray-700 line-clamp-3">
+        <p className="text-sm text-cyan-100/80 line-clamp-3 leading-relaxed">
           {truncateText(paper.summary)}
         </p>
 
         {/* Status badges */}
         <div className="flex flex-wrap gap-2">
           {isSaved && (
-            <span className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs rounded font-medium">
-              ✓ Saved
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 border border-green-500/30 text-green-300 text-xs rounded-md font-medium">
+              <BookmarkCheck size={14} />
+              Saved
             </span>
           )}
           {isCached && (
-            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-medium">
-              💾 Cached
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs rounded-md font-medium">
+              <HardDrive size={14} />
+              Cached
             </span>
           )}
         </div>
@@ -82,7 +85,7 @@ export function PaperCard({
         <div className="flex gap-2 pt-2">
           <button
             onClick={onOpen}
-            className="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium text-sm hover:bg-indigo-700 transition-colors"
+            className="flex-1 px-3 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white rounded-lg font-medium text-sm transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40"
           >
             Open
           </button>
@@ -92,7 +95,7 @@ export function PaperCard({
               {onRemove && (
                 <button
                   onClick={onRemove}
-                  className="px-3 py-2 bg-red-100 text-red-700 rounded-lg font-medium text-sm hover:bg-red-200 transition-colors"
+                  className="px-3 py-2 bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30 hover:border-red-500/50 rounded-lg font-medium text-sm transition-all duration-300"
                 >
                   Remove
                 </button>
@@ -101,9 +104,10 @@ export function PaperCard({
           ) : (
             <button
               onClick={onSave}
-              className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-300 transition-colors"
+              className="px-3 py-2 bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40 rounded-lg font-medium text-sm transition-all duration-300 flex items-center gap-2"
             >
-              Save
+              <Bookmark size={16} />
+              <span>Save</span>
             </button>
           )}
         </div>

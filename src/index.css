@@ -1,24 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Poppins:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --primary: #1f2937;
-  --secondary: #6366f1;
-  --accent: #f59e0b;
+@layer base {
+  :root {
+    --primary: #0f172a;
+    --secondary: #06b6d4;
+    --accent: #a855f7;
+  }
+
+  body {
+    @apply antialiased;
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1a1a3f 50%, #0f172a 100%);
+    color: #e0e7ff;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  code {
+    @apply font-mono;
+    font-family: 'Space Mono', monospace;
+  }
+
+  button {
+    @apply transition-all duration-300;
+  }
+
+  /* Smooth animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInFromLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes glow {
+    0%, 100% {
+      text-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+    }
+    50% {
+      text-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+    }
+  }
+
+  .animate-fadeInUp {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .animate-slideInFromLeft {
+    animation: slideInFromLeft 0.6s ease-out;
+  }
+
+  .glow-text {
+    animation: glow 2s ease-in-out infinite;
+  }
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@layer components {
+  .glass-morphism {
+    @apply backdrop-blur-md bg-white/5 border border-cyan-500/20;
+  }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  .gradient-btn {
+    @apply bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-medium rounded-lg transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50;
+  }
+
+  .gradient-btn-secondary {
+    @apply bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40 rounded-lg font-medium transition-all duration-300;
+  }
+
+  .card-futuristic {
+    @apply backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl hover:border-cyan-500/40 transition-all duration-300;
+  }
 }

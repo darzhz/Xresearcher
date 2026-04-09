@@ -9,6 +9,7 @@ import { ModelDownloadModal } from './components/ModelDownloadModal'
 import { useOPFS } from './hooks/useOPFS'
 import { useLLM } from './hooks/useLLM'
 import type { PaperData, AppView } from './types'
+import type { ModelConfig } from './lib/models'
 import { fetchAr5ivPaper } from './lib/arxiv'
 import { loadPaperFromOPFS, initializePaperStorage } from './lib/paperStorage'
 
@@ -19,7 +20,7 @@ function App() {
   const [readerError, setReaderError] = useState<string | null>(null)
   const [showModelModal, setShowModelModal] = useState(true)
   const opfsHooks = useOPFS()
-  const { initialized, error: llmError, initProgress, initLoadingPercent, isDownloading, downloadModel } = useLLM()
+  const { initialized, error: llmError, initProgress, initLoadingPercent, isDownloading, activeModel, downloadModel } = useLLM()
 
   // Initialize OPFS and paperStorage on mount
   useEffect(() => {
@@ -74,8 +75,8 @@ function App() {
     setActiveView('inbox')
   }
 
-  const handleDownloadModel = () => {
-    downloadModel()
+  const handleDownloadModel = (config: ModelConfig) => {
+    downloadModel(config)
   }
 
   const handleSkipDownload = () => {
@@ -84,11 +85,15 @@ function App() {
 
   const handleRetryDownload = () => {
     setShowModelModal(true)
-    downloadModel()
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white overflow-hidden">
+      {/* Animated background gradient */}
+      <div className="fixed inset-0 -z-10 opacity-30">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-transparent to-purple-500/20 blur-3xl" />
+      </div>
+
       {/* Model Download Modal */}
       <ModelDownloadModal
         isOpen={showModelModal && !initialized}
@@ -96,6 +101,7 @@ function App() {
         progress={initLoadingPercent}
         progressMessage={initProgress}
         error={llmError}
+        currentModel={activeModel}
         onDownload={handleDownloadModel}
         onSkip={handleSkipDownload}
         onRetry={handleRetryDownload}
@@ -108,51 +114,60 @@ function App() {
         onExitReader={handleExitReader}
       />
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {activeView === 'inbox' && (
-          <InboxView onOpenPaper={handleOpenPaper} />
-        )}
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+        <div className="max-w-7xl mx-auto">
+          {activeView === 'inbox' && (
+            <InboxView onOpenPaper={handleOpenPaper} />
+          )}
 
-        {activeView === 'library' && (
-          <LibraryView onOpenPaper={handleOpenPaper} />
-        )}
+          {activeView === 'library' && (
+            <LibraryView onOpenPaper={handleOpenPaper} />
+          )}
 
-        {activeView === 'reader' && readerPaper ? (
-          <div className="space-y-4">
-            {/* Paper search bar in reader */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <PaperInput
-                onSubmit={handlePaperInputSubmit}
-                loading={readerLoading}
-                error={readerError}
-              />
-            </div>
+          {activeView === 'reader' && readerPaper ? (
+            <div className="space-y-6">
+              {/* Paper search bar in reader */}
+              <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl p-4 sm:p-6 shadow-2xl hover:border-cyan-500/40 transition-all duration-300">
+                <PaperInput
+                  onSubmit={handlePaperInputSubmit}
+                  loading={readerLoading}
+                  error={readerError}
+                />
+              </div>
 
-            {/* Reader grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-              <aside className="lg:col-span-1">
-                <PaperOutline paper={readerPaper} />
-              </aside>
-              <div className="lg:col-span-3">
-                <SummaryView paper={readerPaper} />
+              {/* Reader grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <aside className="lg:col-span-1">
+                  <PaperOutline paper={readerPaper} />
+                </aside>
+                <div className="lg:col-span-3">
+                  <SummaryView paper={readerPaper} />
+                </div>
               </div>
             </div>
-          </div>
-        ) : activeView === 'reader' && readerLoading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">Loading paper...</p>
-          </div>
-        ) : activeView === 'reader' && readerError ? (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700">{readerError}</p>
-            <button
-              onClick={handleExitReader}
-              className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Back
-            </button>
-          </div>
-        ) : null}
+          ) : activeView === 'reader' && readerLoading ? (
+            <div className="flex items-center justify-center py-20 sm:py-32">
+              <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-2xl p-8 sm:p-12 shadow-2xl">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-12 h-12 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+                  <p className="text-center text-cyan-300 font-medium">Loading paper...</p>
+                </div>
+              </div>
+            </div>
+          ) : activeView === 'reader' && readerError ? (
+            <div className="max-w-2xl mx-auto">
+              <div className="backdrop-blur-md bg-red-500/10 border border-red-500/30 rounded-2xl p-6 sm:p-8 shadow-2xl">
+                <p className="text-red-300 text-sm sm:text-base mb-6">{readerError}</p>
+                <button
+                  onClick={handleExitReader}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-medium rounded-lg shadow-lg hover:shadow-cyan-500/50 transition-all duration-300"
+                >
+                  ← Back
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </main>
     </div>
   )

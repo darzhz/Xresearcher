@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Plus, RefreshCw, Wifi, AlertCircle, Loader } from 'lucide-react'
 import { useArxiv } from '../hooks/useArxiv'
 import { useInterests } from '../hooks/useInterests'
 import { useLibrary } from '../hooks/useLibrary'
@@ -39,19 +40,20 @@ export function InboxView({ onOpenPaper }: InboxViewProps) {
   return (
     <div className="space-y-6">
       {/* Category selection */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">My Interests</h2>
+      <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl p-6 hover:border-cyan-500/40 transition-all duration-300">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-cyan-100">My Interests</h2>
           <button
             onClick={() => setShowCategoryPicker(true)}
-            className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
+            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/40 hover:border-cyan-500/60 rounded-lg text-sm font-medium transition-all duration-300"
           >
-            + Add
+            <Plus size={16} />
+            Add
           </button>
         </div>
 
         {interests.length === 0 ? (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-cyan-300/60">
             No interests selected. Click "Add" to get started.
           </p>
         ) : (
@@ -59,12 +61,12 @@ export function InboxView({ onOpenPaper }: InboxViewProps) {
             {interests.map(cat => (
               <span
                 key={cat}
-                className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-cyan-300 rounded-full text-sm hover:border-cyan-500/50 transition-all duration-300"
               >
                 {cat}
                 <button
                   onClick={() => removeInterest(cat)}
-                  className="hover:text-indigo-900 font-bold"
+                  className="text-cyan-400 hover:text-red-400 font-bold transition-colors"
                 >
                   ✕
                 </button>
@@ -79,25 +81,28 @@ export function InboxView({ onOpenPaper }: InboxViewProps) {
         <button
           onClick={handleLoadFeed}
           disabled={loading || isOffline}
-          className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-400 transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:from-slate-500 disabled:to-slate-600 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 disabled:shadow-none disabled:cursor-not-allowed"
         >
-          {loading ? '⏳ Loading...' : '🔄 Load Daily Feed'}
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          <span>{loading ? 'Loading...' : 'Load Daily Feed'}</span>
         </button>
       )}
 
       {/* Offline warning */}
       {isOffline && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-700">
-            📡 You're offline. Inbox requires an internet connection.
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3">
+          <Wifi size={18} className="text-amber-400 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-amber-300">
+            You're offline. Inbox requires an internet connection.
           </p>
         </div>
       )}
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+          <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-red-300">{error}</p>
         </div>
       )}
 
@@ -121,9 +126,10 @@ export function InboxView({ onOpenPaper }: InboxViewProps) {
             <button
               onClick={() => loadMore()}
               disabled={loading}
-              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 disabled:bg-gray-300 transition-colors"
+              className="w-full px-4 py-3 bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40 rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? 'Loading...' : 'Load More'}
+              {loading && <Loader size={18} className="animate-spin" />}
+              <span>{loading ? 'Loading...' : 'Load More'}</span>
             </button>
           )}
         </>
@@ -132,10 +138,10 @@ export function InboxView({ onOpenPaper }: InboxViewProps) {
       {/* Empty state */}
       {!loading && results.length === 0 && interests.length > 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-600 mb-4">No papers found for your interests.</p>
+          <p className="text-cyan-300/60 mb-4">No papers found for your interests.</p>
           <button
             onClick={handleLoadFeed}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50"
           >
             Try again
           </button>

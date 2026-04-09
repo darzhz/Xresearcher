@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ModelConfig } from '../lib/models'
 
 export function useLLM() {
   const workerRef = useRef<Worker | null>(null)
@@ -7,6 +8,7 @@ export function useLLM() {
   const [initProgress, setInitProgress] = useState<string>('')
   const [initLoadingPercent, setInitLoadingPercent] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [activeModel, setActiveModel] = useState<ModelConfig | null>(null)
 
   useEffect(() => {
     // Initialize worker (but don't download model yet)
@@ -55,7 +57,7 @@ export function useLLM() {
     }
   }, [])
 
-  const downloadModel = useCallback(() => {
+  const downloadModel = useCallback((config: ModelConfig) => {
     if (!workerRef.current) {
       setError('Worker not initialized')
       return
@@ -64,10 +66,13 @@ export function useLLM() {
     setError(null)
     setInitProgress('Starting download...')
     setIsDownloading(true)
+    setActiveModel(config)
 
-    // Trigger model download in worker
+    // Trigger model download in worker with selected model
     workerRef.current.postMessage({
-      type: 'init'
+      type: 'init',
+      modelId: config.repoId,
+      filename: config.filename
     })
   }, [])
 
@@ -120,6 +125,7 @@ export function useLLM() {
     initProgress,
     initLoadingPercent,
     isDownloading,
+    activeModel,
     downloadModel,
     summarize
   }

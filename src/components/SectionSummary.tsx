@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { ChevronDown, Volume2, Loader, AlertCircle, Download } from 'lucide-react'
 import { Section } from '../types'
 import { useLLM } from '../hooks/useLLM'
+import { splitIntoSentences, queueSpeechSentences } from '../lib/textChunking'
 
 interface SectionSummaryProps {
   section: Section
@@ -14,6 +16,7 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
   const [loading, setLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const speechControllerRef = useRef<{ cancel: () => void } | null>(null)
 
   const generateSummary = async () => {
     if (summary) return
@@ -38,7 +41,8 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
 
   const toggleSpeech = async () => {
     if (isSpeaking) {
-      window.speechSynthesis.cancel()
+      speechControllerRef.current?.cancel()
+      speechControllerRef.current = null
       setIsSpeaking(false)
       return
     }
@@ -49,46 +53,49 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
 
     if (summary) {
       setIsSpeaking(true)
-      const utterance = new SpeechSynthesisUtterance(summary)
-      utterance.onend = () => setIsSpeaking(false)
-      utterance.onerror = () => setIsSpeaking(false)
-      window.speechSynthesis.speak(utterance)
+      const sentences = splitIntoSentences(summary)
+      speechControllerRef.current = queueSpeechSentences(sentences, () => {
+        // Optional: track progress as sentences complete
+      })
+
+      // Listen for when all sentences finish
+      const checkCompletion = setInterval(() => {
+        if (window.speechSynthesis.speaking === false) {
+          clearInterval(checkCompletion)
+          setIsSpeaking(false)
+          speechControllerRef.current = null
+        }
+      }, 100)
     }
   }
 
   return (
     <div
       id={section.id}
-      className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+      className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl overflow-hidden hover:border-cyan-500/40 transition-all duration-300"
     >
       <button
         onClick={onToggle}
-        className="w-full px-6 py-4 text-left hover:bg-gray-50 transition-colors flex items-center justify-between"
+        className="w-full px-6 py-4 text-left hover:bg-white/5 transition-colors flex items-center justify-between group"
       >
-        <h3 className="text-lg font-semibold text-gray-900">{section.title}</h3>
-        <svg
-          className={`w-5 h-5 text-gray-500 transition-transform ${
+        <h3 className="text-lg font-semibold text-cyan-100 group-hover:text-cyan-300 transition-colors">
+          {section.title}
+        </h3>
+        <ChevronDown
+          size={20}
+          className={`text-cyan-400 transition-transform duration-300 group-hover:text-cyan-300 ${
             isExpanded ? 'rotate-180' : ''
           }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 14l-7 7m0 0l-7-7m7 7V3"
-          />
-        </svg>
+        />
       </button>
 
       {isExpanded && (
-        <div className="border-t border-gray-200 px-6 py-4 space-y-4">
+        <div className="border-t border-cyan-500/20 px-6 py-4 space-y-4">
           {/* LLM initialization status */}
           {!initialized && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-700">
+            <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-start gap-3">
+              <Loader size={18} className="text-cyan-400 mt-0.5 animate-spin flex-shrink-0" />
+              <p className="text-sm text-cyan-300">
                 Loading AI model... This only happens once.
               </p>
             </div>
@@ -96,50 +103,63 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
 
           {/* Error messages */}
           {llmError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{llmError}</p>
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+              <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-300">{llmError}</p>
             </div>
           )}
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+              <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
 
           {/* Summary display */}
           {summary ? (
             <div className="space-y-3">
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                <p className="text-sm text-gray-700">{summary}</p>
+              <div className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/30 rounded-lg p-4">
+                <p className="text-sm text-cyan-100 leading-relaxed">{summary}</p>
               </div>
               <button
                 onClick={toggleSpeech}
-                className={`w-full px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 ${
                   isSpeaking
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
+                    : 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/40 text-cyan-300 hover:from-cyan-500/40 hover:to-purple-500/40'
                 }`}
               >
-                {isSpeaking ? '⏹ Stop' : '🔊 Listen'}
+                <Volume2 size={18} />
+                <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
               </button>
             </div>
           ) : !initialized ? (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-center">
-              <p className="text-sm text-amber-700 mb-3">
-                AI model not downloaded yet. Download it to enable summarization.
-              </p>
-              <p className="text-xs text-amber-600">
-                You'll see the download dialog at the top of the page.
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Download size={18} className="text-amber-400" />
+                <p className="text-sm text-amber-300 font-medium">
+                  AI model not downloaded yet
+                </p>
+              </div>
+              <p className="text-xs text-amber-300/70">
+                Download it to enable instant summarization.
               </p>
             </div>
           ) : (
             <button
               onClick={generateSummary}
               disabled={loading || !!error}
-              className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-400 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:from-slate-500 disabled:to-slate-600 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 disabled:shadow-none"
             >
-              {loading ? '⏳ Summarizing...' : 'Generate Summary'}
+              {loading ? (
+                <>
+                  <Loader size={18} className="animate-spin" />
+                  <span>Summarizing...</span>
+                </>
+              ) : (
+                <span>Generate Summary</span>
+              )}
             </button>
           )}
         </div>
