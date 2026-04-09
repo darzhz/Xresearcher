@@ -41,6 +41,24 @@ export default defineConfig({
               cacheName: 'ar5iv-cache',
               expiration: { maxEntries: 50 }
             }
+          },
+          {
+            urlPattern: /^https:\/\/export\.arxiv\.org\/api\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'arxiv-api-cache',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 50, maxAgeSeconds: 3600 }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/api\.allorigins\.win\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'cors-proxy-cache',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 20, maxAgeSeconds: 3600 }
+            }
           }
         ]
       }
