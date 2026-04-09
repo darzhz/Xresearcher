@@ -1,4 +1,4 @@
-# ArXiv Local-Voice (ALV)
+# xresearcher
 
 A privacy-centric, local-first PWA that transforms arXiv papers into structured, audio-enabled research summaries using on-device AI.
 

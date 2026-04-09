@@ -8,8 +8,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'ArXiv Local-Voice',
-        short_name: 'ALV',
+        name: 'xresearcher',
+        short_name: 'xres',
         description: 'Privacy-centric research summarizer with on-device AI',
         theme_color: '#1f2937',
         background_color: '#ffffff',
