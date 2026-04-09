@@ -6,9 +6,10 @@ export function useLLM() {
   const [error, setError] = useState<string | null>(null)
   const [initProgress, setInitProgress] = useState<string>('')
   const [initLoadingPercent, setInitLoadingPercent] = useState(0)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   useEffect(() => {
-    // Initialize worker
+    // Initialize worker (but don't download model yet)
     try {
       workerRef.current = new Worker(
         new URL('../workers/llm.worker.ts', import.meta.url),
@@ -24,15 +25,18 @@ export function useLLM() {
             if (progress !== undefined) {
               setInitLoadingPercent(progress)
             }
+            setIsDownloading(true)
             break
 
           case 'init-complete':
             setInitialized(true)
             setInitProgress('Model ready!')
+            setIsDownloading(false)
             break
 
           case 'error':
             setError(workerError || 'Worker error')
+            setIsDownloading(false)
             break
         }
       }
@@ -40,13 +44,8 @@ export function useLLM() {
       workerRef.current.onerror = (event) => {
         console.error('Worker error:', event)
         setError(`Worker error: ${event.message}`)
+        setIsDownloading(false)
       }
-
-      // Initialize the model
-      setInitProgress('Initializing model...')
-      workerRef.current.postMessage({
-        type: 'init'
-      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize worker')
     }
@@ -56,6 +55,22 @@ export function useLLM() {
     }
   }, [])
 
+  const downloadModel = useCallback(() => {
+    if (!workerRef.current) {
+      setError('Worker not initialized')
+      return
+    }
+
+    setError(null)
+    setInitProgress('Starting download...')
+    setIsDownloading(true)
+
+    // Trigger model download in worker
+    workerRef.current.postMessage({
+      type: 'init'
+    })
+  }, [])
+
   const summarize = useCallback(
     async (text: string, sectionId: string): Promise<string> => {
       if (!workerRef.current) {
@@ -63,7 +78,7 @@ export function useLLM() {
       }
 
       if (!initialized) {
-        throw new Error('Model is still loading. Please wait...')
+        throw new Error('Model is not loaded. Please download the AI model first.')
       }
 
       return new Promise((resolve, reject) => {
@@ -104,6 +119,8 @@ export function useLLM() {
     error,
     initProgress,
     initLoadingPercent,
+    isDownloading,
+    downloadModel,
     summarize
   }
 }

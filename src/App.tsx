@@ -5,7 +5,9 @@ import { LibraryView } from './components/LibraryView'
 import { PaperInput } from './components/PaperInput'
 import { PaperOutline } from './components/PaperOutline'
 import { SummaryView } from './components/SummaryView'
+import { ModelDownloadModal } from './components/ModelDownloadModal'
 import { useOPFS } from './hooks/useOPFS'
+import { useLLM } from './hooks/useLLM'
 import type { PaperData, AppView } from './types'
 import { fetchAr5ivPaper } from './lib/arxiv'
 import { loadPaperFromOPFS, initializePaperStorage } from './lib/paperStorage'
@@ -15,7 +17,9 @@ function App() {
   const [readerPaper, setReaderPaper] = useState<PaperData | null>(null)
   const [readerLoading, setReaderLoading] = useState(false)
   const [readerError, setReaderError] = useState<string | null>(null)
+  const [showModelModal, setShowModelModal] = useState(true)
   const opfsHooks = useOPFS()
+  const { initialized, error: llmError, initProgress, initLoadingPercent, isDownloading, downloadModel } = useLLM()
 
   // Initialize OPFS and paperStorage on mount
   useEffect(() => {
@@ -70,8 +74,33 @@ function App() {
     setActiveView('inbox')
   }
 
+  const handleDownloadModel = () => {
+    downloadModel()
+  }
+
+  const handleSkipDownload = () => {
+    setShowModelModal(false)
+  }
+
+  const handleRetryDownload = () => {
+    setShowModelModal(true)
+    downloadModel()
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Model Download Modal */}
+      <ModelDownloadModal
+        isOpen={showModelModal && !initialized}
+        isDownloading={isDownloading}
+        progress={initLoadingPercent}
+        progressMessage={initProgress}
+        error={llmError}
+        onDownload={handleDownloadModel}
+        onSkip={handleSkipDownload}
+        onRetry={handleRetryDownload}
+      />
+
       <NavBar
         activeTab={activeView as Exclude<AppView, 'reader'>}
         onTabChange={(tab) => setActiveView(tab as AppView)}
