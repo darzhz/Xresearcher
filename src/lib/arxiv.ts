@@ -1,26 +1,67 @@
 import type { ArxivMetadata, ArxivSearchParams } from '../types'
 
 const ARXIV_API = 'https://export.arxiv.org/api/query?'
-const CORS_PROXY = 'https://api.allorigins.win/get?url='
+const CORS_PROXIES = [
+  'https://api.allorigins.win/get?url=',
+  'https://corsproxy.io/?',
+]
 
 /**
  * Fetch with automatic CORS fallback.
- * Tries direct fetch first; if it fails, retries through allorigins proxy.
+ * Tries direct fetch first; if it fails, retries through CORS proxies.
  */
 async function withCORSFallback(url: string): Promise<Response> {
+  // First, try direct fetch
   try {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return response
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8'
+      }
+    })
+    if (response.ok) {
+      return response
+    }
   } catch (error) {
-    console.warn(`Direct fetch failed (${error}), trying CORS proxy...`)
-    const encoded = encodeURIComponent(url)
-    const proxyUrl = `${CORS_PROXY}${encoded}`
-    const proxyResponse = await fetch(proxyUrl)
-    if (!proxyResponse.ok) throw error
-    const data = await proxyResponse.json()
-    return new Response(data.contents, { status: 200 })
+    console.warn('Direct fetch failed, trying CORS proxy...', error)
   }
+
+  // Try each CORS proxy in sequence
+  for (const proxyBase of CORS_PROXIES) {
+    try {
+      const encoded = encodeURIComponent(url)
+      const proxyUrl = `${proxyBase}${encoded}`
+      const proxyResponse = await fetch(proxyUrl)
+
+      if (!proxyResponse.ok) {
+        console.warn(`Proxy ${proxyBase} failed with status ${proxyResponse.status}`)
+        continue
+      }
+
+      // Handle different proxy response formats
+      let content: string
+
+      if (proxyBase.includes('allorigins')) {
+        const data = await proxyResponse.json()
+        content = data.contents
+      } else if (proxyBase.includes('corsproxy')) {
+        content = await proxyResponse.text()
+      } else {
+        content = await proxyResponse.text()
+      }
+
+      return new Response(content, {
+        status: 200,
+        headers: { 'Content-Type': 'application/xml' }
+      })
+    } catch (error) {
+      console.warn(`Proxy ${proxyBase} error:`, error)
+      continue
+    }
+  }
+
+  // All proxies failed
+  throw new Error('CORS error: Unable to reach arXiv API. Please check your internet connection or try again later.')
 }
 
 /**
@@ -173,7 +214,15 @@ export async function fetchDailyFeed(
 export async function fetchAr5ivPaper(arxivId: string) {
   const ar5ivUrl = `https://ar5iv.org/html/${arxivId}`
 
-  const response = await fetch(ar5ivUrl)
+  let response: Response
+  try {
+    response = await fetch(ar5ivUrl)
+  } catch (error) {
+    // If ar5iv fetch fails, try through CORS proxy
+    console.warn('Direct ar5iv fetch failed, trying CORS proxy...')
+    response = await withCORSFallback(ar5ivUrl)
+  }
+
   if (!response.ok) {
     throw new Error(`Failed to fetch paper: ${response.statusText}`)
   }
