@@ -8,10 +8,19 @@ interface SectionSummaryProps {
   section: Section
   isExpanded: boolean
   onToggle: () => void
+  initialized: boolean
+  llmError: string | null
+  summarize: (text: string, sectionId: string) => Promise<string>
 }
 
-export function SectionSummary({ section, isExpanded, onToggle }: SectionSummaryProps) {
-  const { initialized, error: llmError, summarize } = useLLM()
+export function SectionSummary({ 
+  section, 
+  isExpanded, 
+  onToggle,
+  initialized,
+  llmError,
+  summarize
+}: SectionSummaryProps) {
   const [summary, setSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -72,95 +81,105 @@ export function SectionSummary({ section, isExpanded, onToggle }: SectionSummary
   return (
     <div
       id={section.id}
-      className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl overflow-hidden hover:border-cyan-500/40 transition-all duration-300"
+      className="bg-paper border-ink border hover:bg-neutral-50 transition-colors"
     >
       <button
         onClick={onToggle}
-        className="w-full px-6 py-4 text-left hover:bg-white/5 transition-colors flex items-center justify-between group"
+        className="w-full px-6 py-5 text-left hover:bg-ink hover:text-paper transition-colors flex items-center justify-between group"
       >
-        <h3 className="text-lg font-semibold text-cyan-100 group-hover:text-cyan-300 transition-colors">
+        <h3 className="text-xl font-display font-black uppercase tracking-tight group-hover:text-paper transition-colors">
           {section.title}
         </h3>
         <ChevronDown
           size={20}
-          className={`text-cyan-400 transition-transform duration-300 group-hover:text-cyan-300 ${
+          className={`text-ink transition-transform duration-300 group-hover:text-paper ${
             isExpanded ? 'rotate-180' : ''
           }`}
         />
       </button>
 
       {isExpanded && (
-        <div className="border-t border-cyan-500/20 px-6 py-4 space-y-4">
+        <div className="border-t border-ink px-6 py-8 space-y-6">
           {/* LLM initialization status */}
           {!initialized && (
-            <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-start gap-3">
-              <Loader size={18} className="text-cyan-400 mt-0.5 animate-spin flex-shrink-0" />
-              <p className="text-sm text-cyan-300">
-                Loading AI model... This only happens once.
-              </p>
+            <div className="p-4 border-2 border-divider bg-divider/10 flex items-start gap-4">
+              <Loader size={20} className="text-ink animate-spin flex-shrink-0" />
+              <div className="space-y-1">
+                <p className="text-xs font-mono font-bold uppercase tracking-widest">System Notice</p>
+                <p className="text-sm font-body italic text-ink/70">
+                  Initializing local AI engine for summarization. This may take a moment on first run.
+                </p>
+              </div>
             </div>
           )}
 
           {/* Error messages */}
-          {llmError && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-              <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-red-300">{llmError}</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-              <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-red-300">{error}</p>
+          {(llmError || error) && (
+            <div className="p-4 border-2 border-editorial bg-editorial/5 flex items-start gap-4">
+              <AlertCircle size={20} className="text-editorial flex-shrink-0" />
+              <div className="space-y-1">
+                <p className="text-xs font-mono font-bold uppercase tracking-widest text-editorial">Editorial Error</p>
+                <p className="text-sm font-body text-ink/80">{llmError || error}</p>
+              </div>
             </div>
           )}
 
           {/* Summary display */}
           {summary ? (
-            <div className="space-y-3">
-              <div className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/30 rounded-lg p-4">
-                <p className="text-sm text-cyan-100 leading-relaxed">{summary}</p>
-              </div>
-              <button
-                onClick={toggleSpeech}
-                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 ${
-                  isSpeaking
-                    ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
-                    : 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/40 text-cyan-300 hover:from-cyan-500/40 hover:to-purple-500/40'
-                }`}
-              >
-                <Volume2 size={18} />
-                <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
-              </button>
-            </div>
-          ) : !initialized ? (
-            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Download size={18} className="text-amber-400" />
-                <p className="text-sm text-amber-300 font-medium">
-                  AI model not downloaded yet
+            <div className="space-y-6">
+              <div className="relative">
+                <div className="absolute -left-2 top-0 w-1 h-full bg-editorial opacity-20" />
+                <p className="text-lg font-body text-ink leading-relaxed text-justify editorial-drop-cap italic">
+                  {summary}
                 </p>
               </div>
-              <p className="text-xs text-amber-300/70">
-                Download it to enable instant summarization.
-              </p>
+              
+              <div className="flex justify-end pt-4 border-t border-divider">
+                <button
+                  onClick={toggleSpeech}
+                  className={`flex items-center gap-3 px-6 py-3 font-mono text-[10px] uppercase font-black tracking-[0.2em] transition-all ${
+                    isSpeaking
+                      ? 'bg-editorial text-paper'
+                      : 'bg-ink text-paper hover:bg-editorial'
+                  }`}
+                >
+                  <Volume2 size={14} />
+                  <span>{isSpeaking ? 'Halt Audio' : 'Play Audio'}</span>
+                </button>
+              </div>
+            </div>
+          ) : !initialized ? (
+            <div className="p-8 border-2 border-divider border-dashed text-center">
+              <div className="flex flex-col items-center gap-4">
+                <Download size={24} className="text-ink/20" />
+                <div className="space-y-2">
+                  <p className="text-sm font-display font-black uppercase tracking-widest">Model Required</p>
+                  <p className="text-[10px] font-mono text-ink/40 max-w-xs mx-auto">
+                    A compatible AI model must be installed locally to perform editorial summarization.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : (
-            <button
-              onClick={generateSummary}
-              disabled={loading || !!error}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:from-slate-500 disabled:to-slate-600 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 disabled:shadow-none"
-            >
-              {loading ? (
-                <>
-                  <Loader size={18} className="animate-spin" />
-                  <span>Summarizing...</span>
-                </>
-              ) : (
-                <span>Generate Summary</span>
-              )}
-            </button>
+            <div className="flex flex-col items-center py-8">
+              <button
+                onClick={generateSummary}
+                disabled={loading || !!error}
+                className="group relative px-8 py-4 bg-ink text-paper hover:bg-editorial transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center gap-3 relative z-10 font-mono text-[10px] uppercase font-black tracking-[0.2em]">
+                  {loading ? (
+                    <>
+                      <Loader size={14} className="animate-spin" />
+                      <span>Synthesizing...</span>
+                    </>
+                  ) : (
+                    <span>Generate Editorial Summary</span>
+                  )}
+                </div>
+                <div className="absolute inset-0 border-2 border-ink group-hover:border-editorial translate-x-1 translate-y-1 -z-0 transition-colors" />
+              </button>
+            </div>
           )}
         </div>
       )}

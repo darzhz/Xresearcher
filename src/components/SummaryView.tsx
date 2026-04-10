@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { PaperData } from '../types'
 import { SectionSummary } from './SectionSummary'
-
 interface SummaryViewProps {
   paper: PaperData
+  initialized: boolean
+  llmError: string | null
+  summarize: (text: string, sectionId: string) => Promise<string>
 }
 
-export function SummaryView({ paper }: SummaryViewProps) {
+export function SummaryView({ paper, initialized, llmError, summarize }: SummaryViewProps) {
   const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null)
 
   return (
@@ -34,6 +36,9 @@ export function SummaryView({ paper }: SummaryViewProps) {
                 expandedSectionId === section.id ? null : section.id
               )
             }
+            initialized={initialized}
+            llmError={llmError}
+            summarize={summarize}
           />
         ))}
       </div>

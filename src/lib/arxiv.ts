@@ -1,6 +1,6 @@
 import type { ArxivMetadata, ArxivSearchParams } from '../types'
 
-const ARXIV_API = '/api/arxiv?'
+const ARXIV_API = 'https://export.arxiv.org/api/query?'
 const CORS_PROXIES = [
   'https://proxie.darsh2001rocks.workers.dev/?url=',
   'https://api.allorigins.win/get?url=',
@@ -213,7 +213,7 @@ export async function fetchDailyFeed(
  * Fetch paper HTML from ar5iv and parse it into PaperData.
  */
 export async function fetchAr5ivPaper(arxivId: string) {
-  const ar5ivUrl = `/ar5iv/html/${arxivId}`
+  const ar5ivUrl = `https://arxiv.org/html/${arxivId}`
 
   let response: Response
   try {
@@ -232,14 +232,19 @@ export async function fetchAr5ivPaper(arxivId: string) {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
-  const title = doc.querySelector('h1')?.textContent?.trim() || 'Untitled'
-  const authors = Array.from(doc.querySelectorAll('[class*="author"]'))
+  const title = doc.querySelector('.ltx_title_document')?.textContent?.trim() || 'Untitled'
+
+  // FIX: Target the specific person name class used by LaTeXML/ar5iv
+  const authors = Array.from(doc.querySelectorAll('.ltx_personname'))
     .map(el => el.textContent?.trim())
     .filter(Boolean) as string[]
 
-  const sections = Array.from(doc.querySelectorAll('section')).map(section => ({
+  // IMPROVEMENT: Handle sections more accurately
+  // ar5iv sections usually have the .ltx_section class
+  const sections = Array.from(doc.querySelectorAll('section, .ltx_section')).map(section => ({
     id: section.id || `section-${Math.random()}`,
-    title: section.querySelector('h1, h2, h3')?.textContent?.trim() || 'Untitled',
+    // LaTeXML uses .ltx_title for section headings
+    title: section.querySelector('.ltx_title, h1, h2, h3')?.textContent?.trim() || 'Untitled',
     content: section.textContent || ''
   }))
 

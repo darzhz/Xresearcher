@@ -1,4 +1,4 @@
-import { ArrowLeft, Inbox, BookOpen } from 'lucide-react'
+import { ArrowLeft, Inbox, BookOpen, Newspaper } from 'lucide-react'
 import type { AppView } from '../types'
 
 interface NavBarProps {
@@ -14,57 +14,90 @@ export function NavBar({
   isReaderMode,
   onExitReader
 }: NavBarProps) {
+  const today = new Date().toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
   return (
-    <header className="backdrop-blur-md bg-white/5 border-b border-cyan-500/20 sticky top-0 z-40 shadow-lg">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
+    <header className="bg-paper border-b-4 border-ink sticky top-0 z-40">
+      {/* Top Edition Bar */}
+      <div className="border-b border-ink px-4 py-1 flex justify-between items-center text-[10px] font-mono uppercase tracking-widest text-ink/60">
+        <span>Vol. XXIV — No. 112</span>
+        <span className="hidden sm:inline">AI-Powered Research Intelligence</span>
+        <span>{today}</span>
+      </div>
+
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-lg font-bold text-white">Σ</span>
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center justify-between w-full">
+              {/* Left Spacer for centering */}
+              <div className="w-24 hidden sm:block">
+                {isReaderMode && (
+                  <button
+                    onClick={onExitReader}
+                    className="flex items-center gap-2 text-ink hover:text-editorial transition-colors font-mono uppercase text-xs tracking-tighter"
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Back</span>
+                  </button>
+                )}
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-400 bg-clip-text text-transparent">
-                xresearcher
-              </h1>
+
+              {/* Central Masthead */}
+              <div className="flex flex-col items-center group cursor-default">
+                <div className="flex items-center gap-3">
+                  <Newspaper size={32} className="text-ink group-hover:text-editorial transition-colors" strokeWidth={1.5} />
+                  <h1 className="text-5xl sm:text-7xl font-display font-black text-ink uppercase tracking-tighter text-center">
+                    xresearcher
+                  </h1>
+                </div>
+                <div className="h-px w-full bg-ink mt-2" />
+                <div className="h-[2px] w-full bg-ink mt-0.5" />
+                <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.3em] text-ink/80">
+                  All the Research That's Fit to Summarize
+                </p>
+              </div>
+
+              {/* Right Menu Button (Mobile) */}
+              <div className="w-24 flex justify-end">
+                {isReaderMode && (
+                  <button
+                    onClick={onExitReader}
+                    className="sm:hidden text-ink hover:text-editorial transition-colors"
+                  >
+                    <ArrowLeft size={24} />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {isReaderMode && (
-              <button
-                onClick={onExitReader}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/40 hover:border-cyan-500/60 text-cyan-300 hover:text-cyan-200 rounded-lg font-medium transition-all duration-300 group"
-              >
-                <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-                <span className="hidden sm:inline">Back</span>
-              </button>
+            {!isReaderMode && (
+              <nav className="flex items-center justify-center border-y border-ink w-full py-2 gap-8 sm:gap-16">
+                <button
+                  onClick={() => onTabChange('inbox')}
+                  className={`flex items-center gap-2 font-mono uppercase text-sm tracking-widest transition-colors hover:text-editorial ${
+                    activeTab === 'inbox' ? 'text-editorial font-bold' : 'text-ink'
+                  }`}
+                >
+                  <Inbox size={16} strokeWidth={2} />
+                  <span>Inbox</span>
+                </button>
+                <button
+                  onClick={() => onTabChange('library')}
+                  className={`flex items-center gap-2 font-mono uppercase text-sm tracking-widest transition-colors hover:text-editorial ${
+                    activeTab === 'library' ? 'text-editorial font-bold' : 'text-ink'
+                  }`}
+                >
+                  <BookOpen size={16} strokeWidth={2} />
+                  <span>Library</span>
+                </button>
+              </nav>
             )}
           </div>
-
-          {!isReaderMode && (
-            <div className="mt-4 flex gap-2 sm:gap-3">
-              <button
-                onClick={() => onTabChange('inbox')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300 ${
-                  activeTab === 'inbox'
-                    ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg shadow-cyan-500/50'
-                    : 'bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40'
-                }`}
-              >
-                <Inbox size={18} />
-                <span>Inbox</span>
-              </button>
-              <button
-                onClick={() => onTabChange('library')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300 ${
-                  activeTab === 'library'
-                    ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/50'
-                    : 'bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40'
-                }`}
-              >
-                <BookOpen size={18} />
-                <span>Library</span>
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </header>

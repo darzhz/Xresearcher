@@ -12,6 +12,7 @@ export interface PaperData {
   url: string
   fetchedAt: Date
   summary?: string
+  arxivId?: string
 }
 
 export interface LLMState {

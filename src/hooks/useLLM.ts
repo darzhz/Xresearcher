@@ -20,6 +20,7 @@ export function useLLM() {
 
       workerRef.current.onmessage = (event) => {
         const { type, message, progress, error: workerError } = event.data
+        console.log(`[useLLM] Received message: ${type}`, event.data)
 
         switch (type) {
           case 'init-progress':
@@ -34,6 +35,11 @@ export function useLLM() {
             setInitialized(true)
             setInitProgress('Model ready!')
             setIsDownloading(false)
+            break
+
+          case 'summarize-progress':
+            // Can be used to show summarization progress in UI
+            console.log(`[useLLM] Summarization progress for section ${event.data.sectionId}:`, message)
             break
 
           case 'error':
@@ -87,10 +93,11 @@ export function useLLM() {
       }
 
       return new Promise((resolve, reject) => {
+        console.log(`[useLLM] Requesting summary for section: ${sectionId}`, { textLength: text.length })
         const timeout = setTimeout(() => {
           handler()
-          reject(new Error('Summarization timeout'))
-        }, 60000) // 60 second timeout
+          reject(new Error('Summarization timeout (exceeded 5 minutes)'))
+        }, 300000) // 5 minute timeout
 
         const handler = () => {
           clearTimeout(timeout)
@@ -99,12 +106,16 @@ export function useLLM() {
 
         const listener = (event: MessageEvent) => {
           if (event.data.sectionId === sectionId) {
-            handler()
             if (event.data.type === 'summary-complete') {
+              console.log(`[useLLM] Summary received for section: ${sectionId}`)
+              handler()
               resolve(event.data.summary)
             } else if (event.data.type === 'error') {
+              console.error(`[useLLM] Error received for section: ${sectionId}`, event.data.error)
+              handler()
               reject(new Error(event.data.error))
             }
+            // Ignore other message types for this section (like summarize-progress)
           }
         }
 

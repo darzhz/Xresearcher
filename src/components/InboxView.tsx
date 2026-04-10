@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, RefreshCw, Wifi, AlertCircle, Loader } from 'lucide-react'
 import { useArxiv } from '../hooks/useArxiv'
 import { useInterests } from '../hooks/useInterests'
@@ -20,6 +20,11 @@ export function InboxView({ onOpenPaper }: InboxViewProps) {
   const handleLoadFeed = async () => {
     await loadDailyFeed(interests)
   }
+  useEffect(() => {
+    if (interests.length > 0) {
+      handleLoadFeed()
+    }
+  }, [interests])
 
   const handleSavePaper = async (paperId: string) => {
     const paper = results.find(p => p.id === paperId)

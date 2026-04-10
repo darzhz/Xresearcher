@@ -1,6 +1,13 @@
 // LLM Worker - handles inference in a dedicated thread
 // Uses wllama for WASM-based LLM inference
 
+// Workaround for libraries that expect 'document' to be defined
+if (typeof (self as any).document === 'undefined') {
+  ;(self as any).document = {
+    createElement: () => ({})
+  };
+}
+
 interface MessageData {
   type: 'init' | 'summarize'
   text?: string
@@ -21,32 +28,45 @@ async function initializeModel(
 ): Promise<void> {
   if (modelLoaded) return
 
+  // Report progress immediately
+  self.postMessage({
+    type: 'init-progress',
+    message: 'Initializing WASM runtime...',
+    progress: 0
+  })
+
   try {
     // Dynamically import wllama
     const { Wllama } = await import('@wllama/wllama')
 
-    // Report progress
-    self.postMessage({
-      type: 'init-progress',
-      message: 'Initializing WASM runtime...'
-    })
-
-    // Create wllama instance with default ESM paths
-    // wllama will use CDN by default for WASM files
+    // Create wllama instance with paths to WASM files
+    // wllama will use CDN for WASM files
     wllama = new Wllama(
       {
-        'single-thread/wllama.wasm': 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.3.7/esm/single-thread/wllama.wasm'
+        'single-thread/wllama.wasm': 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.3.7/esm/single-thread/wllama.wasm',
+        'multi-thread/wllama.wasm': 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.3.7/esm/multi-thread/wllama.wasm',
+        'multi-thread/wllama.worker.mjs': 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.3.7/esm/multi-thread/wllama.worker.mjs',
       } as any
     )
 
     // Report progress as model loads
     self.postMessage({
       type: 'init-progress',
-      message: `Downloading model from Hugging Face...`
+      message: `Downloading model from Hugging Face...`,
+      progress: 0
     })
 
     // Load model from Hugging Face with user-selected repo and filename
-    await wllama.loadModelFromHF(modelId, filename)
+    await wllama.loadModelFromHF(modelId, filename, {
+      progressCallback: ({ loaded, total }: { loaded: number; total: number }) => {
+        const progress = Math.round((loaded / total) * 100)
+        self.postMessage({
+          type: 'init-progress',
+          message: `Downloading model: ${progress}%`,
+          progress
+        })
+      }
+    })
 
     self.postMessage({
       type: 'init-progress',
@@ -80,14 +100,22 @@ ${truncatedText}
 
 Summary:`
 
+  console.log('[Worker] Starting generation for text length:', text.length)
+  console.log('[Worker] Generated prompt:', prompt)
+
   try {
+    const startTime = Date.now()
     // Generate summary using wllama
     const summary = await wllama.createCompletion(prompt, {
       nPredict: 100
     })
+    const duration = (Date.now() - startTime) / 1000
 
-    return (summary || '').trim() || 'Unable to generate summary'
+    const result = (summary || '').trim() || 'Unable to generate summary'
+    console.log(`[Worker] Generation complete in ${duration.toFixed(2)}s:`, result)
+    return result
   } catch (error) {
+    console.error('[Worker] Generation error:', error)
     throw new Error(
       `Summarization failed: ${error instanceof Error ? error.message : String(error)}`
     )

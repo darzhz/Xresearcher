@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Zap, HardDrive, CheckCircle2, AlertCircle, Download } from 'lucide-react'
+import { Zap, HardDrive, CheckCircle2, AlertCircle, Download, X } from 'lucide-react'
 import { PRESET_MODELS, loadModelConfig, saveModelConfig } from '../lib/models'
 import type { ModelConfig } from '../lib/models'
 
@@ -54,59 +54,66 @@ export function ModelDownloadModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="backdrop-blur-xl bg-gradient-to-br from-slate-900/80 via-blue-900/40 to-slate-900/80 border border-cyan-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-screen overflow-y-auto">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-xl flex items-center justify-center">
-            <Download size={20} className="text-white" />
+    <div className="fixed inset-0 bg-ink/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-paper border-4 border-ink p-8 max-w-md w-full shadow-[8px_8px_0px_0px_#111111] relative max-h-screen overflow-y-auto">
+        {/* Close Button Style Skip */}
+        {!isDownloading && (
+          <button 
+            onClick={onSkip}
+            className="absolute top-4 right-4 text-ink/40 hover:text-editorial transition-colors"
+          >
+            <X size={20} />
+          </button>
+        )}
+
+        <div className="mb-8 border-b-2 border-ink pb-4">
+          <div className="flex items-center gap-3 mb-2">
+            <Download size={24} className="text-ink" />
+            <h2 className="text-3xl font-display font-black uppercase tracking-tighter italic">
+              Public Notice
+            </h2>
           </div>
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-300 to-purple-400 bg-clip-text text-transparent">
-            AI Model Setup
-          </h2>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-ink/60">
+            Subject: Local Intelligence Engine Setup
+          </p>
         </div>
 
         {/* Show current model if loaded */}
         {currentModel && !isDownloading && !error && (
-          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-start gap-3">
-            <CheckCircle2 size={18} className="text-green-400 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-green-300">
-              Currently loaded: <strong>{currentModel.label}</strong>
+          <div className="mb-6 p-4 border border-ink bg-neutral-100 flex items-start gap-3">
+            <CheckCircle2 size={18} className="text-ink mt-0.5 flex-shrink-0" />
+            <p className="text-xs font-mono uppercase tracking-tight">
+              Active Configuration: <span className="font-black italic">{currentModel.label}</span>
             </p>
           </div>
         )}
 
-        <p className="text-cyan-300/80 mb-4 text-sm">
-          Choose an AI model to enable paper summarization with on-device AI.
-        </p>
+        <div className="space-y-4 mb-8">
+          <p className="font-body text-sm leading-relaxed text-justify">
+            To enable <span className="font-bold italic">editorial summarization</span> on this device, a local AI model must be retrieved. This process ensures your research remains private and processed strictly within your hardware environment.
+          </p>
 
-        <div className="space-y-3 bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 mb-4">
-          <div className="flex items-start gap-3">
-            <Zap size={20} className="text-cyan-400 mt-0.5 flex-shrink-0" />
-            <div className="text-sm">
-              <p className="font-semibold text-cyan-300">Fast & Private</p>
-              <p className="text-cyan-300/70 text-xs">
-                Model runs locally. No data leaves your device.
-              </p>
+          <div className="grid grid-cols-2 gap-4 border-y border-divider py-4">
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] font-black uppercase text-editorial">Security</p>
+              <p className="text-[10px] leading-tight text-ink/60">Zero data exit policy. All inference occurs locally.</p>
             </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <HardDrive size={20} className="text-cyan-400 mt-0.5 flex-shrink-0" />
-            <div className="text-sm">
-              <p className="font-semibold text-cyan-300">Instant Access</p>
-              <p className="text-cyan-300/70 text-xs">
-                Once cached, the model loads instantly for summarization.
-              </p>
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] font-black uppercase text-editorial">Performance</p>
+              <p className="text-[10px] leading-tight text-ink/60">Once cached, summaries are generated instantly.</p>
             </div>
           </div>
         </div>
 
         {/* Model selection - only show when not downloading/error */}
         {!isDownloading && !error && (
-          <div className="mb-4 space-y-2 max-h-48 overflow-y-auto border border-cyan-500/20 rounded-lg p-3 bg-white/5">
+          <div className="mb-8 space-y-0 border-ink border-l border-t newsprint-grid">
             {PRESET_MODELS.map((model) => (
               <label
                 key={model.repoId}
-                className="flex items-start gap-3 p-3 hover:bg-white/10 rounded-lg cursor-pointer transition-colors"
+                className={`flex items-start gap-4 p-4 cursor-pointer transition-colors ${
+                  !isCustom && selectedModel.repoId === model.repoId ? 'bg-ink text-paper' : 'hover:bg-neutral-100'
+                }`}
               >
                 <input
                   type="radio"
@@ -116,29 +123,31 @@ export function ModelDownloadModal({
                     setSelectedModel(model)
                     setIsCustom(false)
                   }}
-                  className="mt-1 accent-cyan-400"
+                  className="mt-1 accent-editorial sr-only"
                 />
                 <div className="text-sm flex-1">
-                  <p className="font-medium text-cyan-100">{model.label}</p>
-                  <p className="text-xs text-cyan-300/60">
-                    {model.sizeGB ? `~${model.sizeGB}GB` : 'Size varies'}
+                  <p className="font-display font-bold uppercase tracking-tight leading-none mb-1">{model.label}</p>
+                  <p className={`font-mono text-[10px] ${!isCustom && selectedModel.repoId === model.repoId ? 'text-paper/60' : 'text-ink/40'}`}>
+                    Payload Size: {model.sizeGB ? `${model.sizeGB} GB` : 'Variable'}
                   </p>
                 </div>
               </label>
             ))}
 
             {/* Custom option */}
-            <label className="flex items-start gap-3 p-3 hover:bg-white/10 rounded-lg cursor-pointer border-t border-cyan-500/20 pt-3 mt-2 transition-colors">
+            <label className={`flex items-start gap-4 p-4 cursor-pointer transition-colors ${
+              isCustom ? 'bg-ink text-paper' : 'hover:bg-neutral-100'
+            }`}>
               <input
                 type="radio"
                 name="model"
                 checked={isCustom}
                 onChange={() => setIsCustom(true)}
-                className="mt-1 accent-cyan-400"
+                className="mt-1 accent-editorial sr-only"
               />
               <div className="text-sm flex-1">
-                <p className="font-medium text-cyan-100">Custom Model</p>
-                <p className="text-xs text-cyan-300/60">Use your own HF GGUF model</p>
+                <p className="font-display font-bold uppercase tracking-tight leading-none mb-1">Custom GGUF Archive</p>
+                <p className={`font-mono text-[10px] ${isCustom ? 'text-paper/60' : 'text-ink/40'}`}>Use external HF repository</p>
               </div>
             </label>
           </div>
@@ -146,91 +155,98 @@ export function ModelDownloadModal({
 
         {/* Custom model inputs */}
         {isCustom && !isDownloading && !error && (
-          <div className="mb-4 space-y-2 p-3 bg-white/5 rounded-lg border border-cyan-500/20">
-            <input
-              type="text"
-              placeholder="HF Repo ID (e.g., meta-llama/Llama-2-7b-hf)"
-              value={customRepo}
-              onChange={(e) => setCustomRepo(e.target.value)}
-              className="w-full px-3 py-2 border border-cyan-500/30 bg-white/5 text-cyan-100 placeholder-cyan-300/50 rounded-lg text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20"
-            />
-            <input
-              type="text"
-              placeholder="GGUF filename (e.g., model.gguf)"
-              value={customFilename}
-              onChange={(e) => setCustomFilename(e.target.value)}
-              className="w-full px-3 py-2 border border-cyan-500/30 bg-white/5 text-cyan-100 placeholder-cyan-300/50 rounded-lg text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20"
-            />
+          <div className="mb-8 space-y-4 p-4 border-2 border-ink bg-neutral-50">
+            <div className="space-y-1">
+              <label className="font-mono text-[10px] uppercase font-black">HF Repository ID</label>
+              <input
+                type="text"
+                placeholder="meta-llama/Llama-2-7b-hf"
+                value={customRepo}
+                onChange={(e) => setCustomRepo(e.target.value)}
+                className="w-full px-3 py-2 border-b-2 border-ink bg-transparent font-mono text-xs focus:outline-none focus:bg-white transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-mono text-[10px] uppercase font-black">GGUF Filename</label>
+              <input
+                type="text"
+                placeholder="model.gguf"
+                value={customFilename}
+                onChange={(e) => setCustomFilename(e.target.value)}
+                className="w-full px-3 py-2 border-b-2 border-ink bg-transparent font-mono text-xs focus:outline-none focus:bg-white transition-colors"
+              />
+            </div>
           </div>
         )}
 
         {/* Download in progress */}
         {isDownloading && (
-          <div className="mb-4 space-y-3">
-            <div className="w-full bg-white/5 border border-cyan-500/20 rounded-full h-2.5 overflow-hidden">
+          <div className="mb-8 space-y-4">
+            <div className="w-full border-2 border-ink h-6 bg-divider relative overflow-hidden">
               <div
-                className="bg-gradient-to-r from-cyan-500 to-cyan-400 h-full transition-all duration-300 shadow-lg shadow-cyan-500/50"
+                className="bg-ink h-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
+              <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-black mix-blend-difference text-paper">
+                {progress}% COMPLETE
+              </span>
             </div>
-            <p className="text-sm text-cyan-300 text-center font-medium">
-              {progressMessage}
-            </p>
-            <p className="text-xs text-cyan-300/60 text-center">
-              {progress}%
+            <p className="font-mono text-[10px] uppercase font-black text-center animate-pulse">
+              Transmission in progress: {progressMessage}
             </p>
           </div>
         )}
 
         {/* Error state */}
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-            <AlertCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-red-300">{error}</p>
+          <div className="mb-8 p-4 border-2 border-editorial bg-editorial/5 flex items-start gap-3">
+            <AlertCircle size={18} className="text-editorial mt-0.5 flex-shrink-0" />
+            <p className="text-xs font-mono uppercase font-black text-editorial leading-tight">{error}</p>
           </div>
         )}
 
         {/* Actions */}
-        <div className="space-y-2.5">
+        <div className="flex flex-col gap-3">
           {isDownloading ? (
-            <p className="text-sm text-cyan-300/60 text-center py-3">
-              Please wait while the model downloads...
+            <p className="font-mono text-[10px] text-ink/40 text-center italic py-4">
+              Interrupting this process may cause archive corruption.
             </p>
           ) : error ? (
             <>
               <button
                 onClick={handleDownload}
-                className="w-full px-4 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50"
+                className="w-full py-4 bg-editorial text-paper font-mono uppercase text-xs font-black tracking-[0.2em] hover:bg-ink transition-colors"
               >
-                Try Again
+                Re-attempt Transmission
               </button>
               <button
                 onClick={onSkip}
-                className="w-full px-4 py-3 bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40 rounded-lg font-medium transition-all duration-300"
+                className="w-full py-4 border-2 border-ink text-ink font-mono uppercase text-xs font-black tracking-[0.2em] hover:bg-neutral-100 transition-colors"
               >
-                Skip for Now
+                Defer Setup
               </button>
             </>
           ) : (
             <>
               <button
                 onClick={handleDownload}
-                className="w-full px-4 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50"
+                className="group relative w-full py-4 bg-ink text-paper hover:bg-editorial transition-colors"
               >
-                Download Model
+                <span className="relative z-10 font-mono uppercase text-xs font-black tracking-[0.2em]">Initiate Download</span>
+                <div className="absolute inset-0 border-2 border-ink group-hover:border-editorial translate-x-1 translate-y-1 -z-0 transition-colors" />
               </button>
               <button
                 onClick={onSkip}
-                className="w-full px-4 py-3 bg-white/5 border border-cyan-500/20 text-cyan-300 hover:bg-white/10 hover:border-cyan-500/40 rounded-lg font-medium transition-all duration-300"
+                className="w-full py-4 text-ink/40 hover:text-ink font-mono uppercase text-[10px] font-black tracking-widest transition-colors"
               >
-                Skip for Now
+                Proceed Without AI
               </button>
             </>
           )}
         </div>
 
-        <p className="text-xs text-cyan-300/50 text-center mt-4">
-          Download anytime from settings. Your device, your data.
+        <p className="text-[9px] font-mono text-ink/30 text-center mt-8 uppercase leading-relaxed">
+          Registry: Vol 1.0 // Distributed by XRESEARCHER ARCHIVE // Printed in NYC
         </p>
       </div>
     </div>
