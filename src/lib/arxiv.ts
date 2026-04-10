@@ -1,6 +1,6 @@
 import type { ArxivMetadata, ArxivSearchParams } from '../types'
 
-const ARXIV_API = 'https://export.arxiv.org/api/query?'
+const ARXIV_API = '/arxiv/api/query?'
 const CORS_PROXIES = [
   'https://corsproxy.io/?',
 ]
@@ -211,7 +211,7 @@ export async function fetchDailyFeed(
  * Fetch paper HTML from ar5iv and parse it into PaperData.
  */
 export async function fetchAr5ivPaper(arxivId: string) {
-  const ar5ivUrl = `https://arxiv.org/html/${arxivId}`
+  const ar5ivUrl = `/ar5iv/html/${arxivId}`
 
   let response: Response
   try {
