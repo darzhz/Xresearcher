@@ -104,11 +104,17 @@ export async function summarizeLargeText(
     targetTokens?: number
   }
 ): Promise<string> {
+  const startTime = performance.now()
   const { onToken, onProgress, targetTokens = 3000 } = opts ?? {}
 
   // Stage 1: extract dense text (instant — no LLM)
+  const extractStart = performance.now()
   onProgress?.(0, 'Extracting key sentences…')
   const dense = extractDenseText(text, targetTokens)
+  const extractEnd = performance.now()
+
+  console.log(`[Summarizer] Stage 1 (Extraction) took ${(extractEnd - extractStart).toFixed(2)}ms`)
+  console.log('[Summarizer] Dense Extracted Text:', dense)
 
   const chunks = chunkText(dense)
   onProgress?.(5, `Processing ${chunks.length} chunks…`)
@@ -117,6 +123,7 @@ export async function summarizeLargeText(
   let running = ''
 
   for (let i = 0; i < chunks.length; i++) {
+    const chunkStart = performance.now()
     const isLast = i === chunks.length - 1
     const pct = 5 + (i / chunks.length) * 80
 
@@ -140,21 +147,26 @@ ${chunks[i]}
 
 Summary:`
 
-    running = ''
+    let currentChunkOutput = ''
     await inferStream(
       prompt,
       token => {
-        running += token
+        currentChunkOutput += token
         if (isLast) onToken?.(token)
       },
       { maxTokens: isLast ? 150 : 100, temperature: 0.2 }
     )
-    running = running.trim()
+    running = currentChunkOutput.trim()
+    
+    const chunkEnd = performance.now()
+    console.log(`[Summarizer] Chunk ${i + 1}/${chunks.length} took ${(chunkEnd - chunkStart).toFixed(2)}ms`)
     onProgress?.(pct, `Chunk ${i + 1}/${chunks.length} done`)
   }
 
   // Stage 3: if only 1 chunk, running IS the final output
   // If multiple chunks, running is already the synthesis
+  const totalTime = performance.now() - startTime
+  console.log(`[Summarizer] Total summarization took ${totalTime.toFixed(2)}ms`)
   onProgress?.(100, 'Done')
   return running
 }

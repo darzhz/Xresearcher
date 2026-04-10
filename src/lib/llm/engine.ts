@@ -3,7 +3,6 @@
 
 let worker: Worker | null = null
 let initialized = false
-let initCallback: ((data: any) => void) | null = null
 
 export function getWorker() {
   if (!worker) {
@@ -21,7 +20,6 @@ export async function initialize(
   onProgress?: (data: any) => void
 ): Promise<void> {
   const w = getWorker()
-  initCallback = onProgress
 
   return new Promise((resolve, reject) => {
     const handler = (event: MessageEvent) => {
