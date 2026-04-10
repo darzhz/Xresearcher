@@ -2,6 +2,8 @@ import type { ArxivMetadata, ArxivSearchParams } from '../types'
 
 const ARXIV_API = '/api/arxiv?'
 const CORS_PROXIES = [
+  'https://proxie.darsh2001rocks.workers.dev/?url=',
+  'https://api.allorigins.win/get?url=',
   'https://corsproxy.io/?',
 ]
 
