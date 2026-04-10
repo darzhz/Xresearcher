@@ -13,12 +13,12 @@ export function SummaryView({ paper, initialized, llmError, summarize }: Summary
 
   return (
     <div className="space-y-6">
-      <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl p-8 hover:border-cyan-500/40 transition-all duration-300">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-100 to-cyan-300 bg-clip-text text-transparent mb-3">
+      <div className="backdrop-blur-md bg-white/5 border border-black rounded-xl p-8  transition-all duration-300">
+        <h2 className="text-3xl font-display font-bold leading-tight italic  mb-3">
           {paper.title}
         </h2>
         {paper.authors.length > 0 && (
-          <p className="text-sm text-cyan-300/70">
+          <p className="text-sm text-black/60 transition-all ">
             By {paper.authors.slice(0, 3).join(', ')}
             {paper.authors.length > 3 && ` +${paper.authors.length - 3} more`}
           </p>

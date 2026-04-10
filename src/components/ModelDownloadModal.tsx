@@ -246,7 +246,7 @@ export function ModelDownloadModal({
         </div>
 
         <p className="text-[9px] font-mono text-ink/30 text-center mt-8 uppercase leading-relaxed">
-          Registry: Vol 1.0 // Distributed by XRESEARCHER ARCHIVE // Printed in NYC
+          Registry: Vol 1.0 // Agrigated by XRESEARCHER ARCHIVE // Printed in Kunnumkulam
         </p>
       </div>
     </div>

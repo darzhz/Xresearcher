@@ -128,18 +128,7 @@ function App() {
 
           {activeView === 'reader' && readerPaper ? (
             <div className="flex flex-col gap-12">
-              {/* Paper search bar in reader */}
-              <div className="border-4 border-ink p-6 sm:p-10 bg-paper hard-shadow-hover transition-all">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="h-8 w-2 bg-editorial" />
-                  <h2 className="font-mono uppercase tracking-[0.2em] text-sm font-bold">Document Archive Query</h2>
-                </div>
-                <PaperInput
-                  onSubmit={handlePaperInputSubmit}
-                  loading={readerLoading}
-                  error={readerError}
-                />
-              </div>
+              
 
               {/* Reader grid */}
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 border-ink border-l border-t">
@@ -158,6 +147,18 @@ function App() {
                     summarize={summarize}
                   />
                 </div>
+              </div>
+              {/* Paper search bar in reader */}
+              <div className="border-4 border-ink p-6 sm:p-10 bg-paper hard-shadow-hover transition-all">
+                <div className="mb-6 flex items-center gap-4">
+                  <div className="h-8 w-2 bg-editorial" />
+                  <h2 className="font-mono uppercase tracking-[0.2em] text-sm font-bold">Document Archive Query</h2>
+                </div>
+                <PaperInput
+                  onSubmit={handlePaperInputSubmit}
+                  loading={readerLoading}
+                  error={readerError}
+                />
               </div>
             </div>
           ) : activeView === 'reader' && readerLoading ? (
@@ -197,12 +198,12 @@ function App() {
           </div>
           <div className="p-8">
              <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] font-black mb-4">Contact</h4>
-             <p className="text-xs font-mono">press@xresearcher.ai</p>
+             <p className="text-xs font-mono">hi@darzh.xyz</p>
           </div>
           <div className="p-8">
              <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] font-black mb-4">Edition</h4>
              <p className="text-xs font-mono">v0.1.0-alpha</p>
-             <p className="text-xs font-mono">Digital Newsprint</p>
+             <p className="text-xs font-mono">Digital Research Newsprint Aggregator</p>
           </div>
           <div className="p-8 bg-editorial/5">
              <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] font-black mb-4 text-editorial">Notice</h4>

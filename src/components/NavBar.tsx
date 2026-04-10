@@ -26,7 +26,7 @@ export function NavBar({
       {/* Top Edition Bar */}
       <div className="border-b border-ink px-4 py-1 flex justify-between items-center text-[10px] font-mono uppercase tracking-widest text-ink/60">
         <span>Vol. XXIV — No. 112</span>
-        <span className="hidden sm:inline">AI-Powered Research Intelligence</span>
+        <span className="hidden sm:inline">Statistical Inference Driven Research Intelligence</span>
         <span>{today}</span>
       </div>
 
