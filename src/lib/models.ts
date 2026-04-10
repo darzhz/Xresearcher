@@ -29,6 +29,12 @@ export const PRESET_MODELS: ModelConfig[] = [
     filename: 'Phi-3-mini-4k-instruct-Q4_K_M.gguf',
     label: 'Phi-3 Mini 4K (Better quality)',
     sizeGB: 2.2
+  },
+  {
+    repoId: 'LMLK/SmolLM2-135M-Instruct-GGUF',
+    filename: 'SmolLM2-135M-Instruct-q8_0.gguf',
+    label: 'SmolLM2 135M (Fastest and Dumbest)',
+    sizeGB: 0.1
   }
 ]
 

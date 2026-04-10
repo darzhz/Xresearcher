@@ -102,7 +102,7 @@ async function generateSummary(text: string): Promise<string> {
 
   // Prepare prompt for summarization
   const prompt = `<|im_start|>system
-You are a research assistant. Summarize the following paper fragments into 3 bullet points focusing on the problem and solution.<|im_end|>
+You are a research assistant. Summarize the following paper in a few sentences.<|im_end|>
 <|im_start|>user
 ${truncatedText}<|im_end|>
 <|im_start|>assistant

@@ -52,7 +52,7 @@ export function NavBar({
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center justify-between w-full">
               {/* Left Spacer for centering */}
-              <div className="w-24  sm:block">
+              <div className={`w-24 ${isReaderMode ? 'hidden' : 'block'} sm:block`}>
                 {isReaderMode && (
                   <button
                     onClick={onExitReader}
