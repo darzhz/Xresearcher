@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader } from 'lucide-react'
+import { Loader, Archive } from 'lucide-react'
 import { useLibrary } from '../hooks/useLibrary'
 import { useOPFS } from '../hooks/useOPFS'
 import { PaperCard } from './PaperCard'
@@ -30,7 +30,7 @@ export function LibraryView({ onOpenPaper }: LibraryViewProps) {
   }, [savedPapers, paperExists])
 
   const handleRemove = async (id: string) => {
-    if (confirm('Remove this paper from your library?')) {
+    if (confirm('Are you sure you wish to remove this record from the permanent archive?')) {
       try {
         await removePaper(id)
       } catch (err) {
@@ -41,10 +41,12 @@ export function LibraryView({ onOpenPaper }: LibraryViewProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-2xl p-8">
-          <Loader size={32} className="text-cyan-400 animate-spin mx-auto mb-3" />
-          <p className="text-cyan-300">Loading library...</p>
+      <div className="flex items-center justify-center py-32">
+        <div className="border-2 border-ink p-12 bg-paper text-center max-w-sm w-full">
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-16 h-16 border-4 border-divider border-t-ink animate-spin" />
+            <p className="font-mono uppercase tracking-widest text-xs font-black">Accessing Library Records...</p>
+          </div>
         </div>
       </div>
     )
@@ -52,37 +54,49 @@ export function LibraryView({ onOpenPaper }: LibraryViewProps) {
 
   if (savedPapers.length === 0) {
     return (
-      <div className="text-center py-16 backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl p-8">
-        <p className="text-cyan-100 mb-4 text-lg font-medium">No papers in your library yet.</p>
-        <p className="text-sm text-cyan-300/70">
-          Save papers from the Inbox to build your personal research library.
+      <div className="text-center py-24 border-2 border-divider border-dashed bg-paper/50">
+        <Archive size={48} className="mx-auto text-ink/10 mb-6" />
+        <h2 className="text-2xl font-display font-black uppercase italic mb-2">Archive Vacant</h2>
+        <p className="font-body text-sm text-ink/40 max-w-xs mx-auto italic">
+          Your personal repository contains no records. Save documents from the Topic Dispatches to build your archive.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="backdrop-blur-md bg-white/5 border border-cyan-500/20 rounded-xl p-6 hover:border-cyan-500/40 transition-all duration-300">
-        <h2 className="text-lg font-semibold text-cyan-100 mb-1">
-          My Library ({savedPapers.length})
-        </h2>
-        <p className="text-sm text-cyan-300/70">
-          All papers below are available offline once cached.
+    <div className="flex flex-col gap-10">
+      <div className="bg-paper border-4 border-ink p-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+          <Archive size={120} strokeWidth={1} />
+        </div>
+        
+        <div className="relative z-10 border-b-2 border-ink pb-4 mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-3xl font-display font-black uppercase tracking-tighter italic">Personal Archive Index</h2>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/40 italic">Registry of Curated Scientific Intelligence</p>
+          </div>
+          <div className="font-mono text-[10px] font-black uppercase bg-ink text-paper px-3 py-1">
+            Total Records: {savedPapers.length}
+          </div>
+        </div>
+        <p className="font-body text-sm text-ink/60 leading-relaxed italic max-w-2xl">
+          The following documents have been curated for offline accessibility. Records marked as <span className="font-black text-ink uppercase">Offline</span> are stored within the Local Persistence Layer.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-8">
         {savedPapers.map(paper => (
-          <PaperCard
-            key={paper.id}
-            paper={paper}
-            isSaved={true}
-            isCached={cachedPapers.has(paper.id)}
-            onSave={() => {}} // Already saved
-            onOpen={() => onOpenPaper(paper.id)}
-            onRemove={() => handleRemove(paper.id)}
-          />
+          <div key={paper.id} className="w-full">
+            <PaperCard
+              paper={paper}
+              isSaved={true}
+              isCached={cachedPapers.has(paper.id)}
+              onSave={() => {}} // Already saved
+              onOpen={() => onOpenPaper(paper.id)}
+              onRemove={() => handleRemove(paper.id)}
+            />
+          </div>
         ))}
       </div>
     </div>
