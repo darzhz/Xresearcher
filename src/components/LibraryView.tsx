@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Loader, Archive } from 'lucide-react'
-import { useLibrary } from '../hooks/useLibrary'
+import { Archive } from 'lucide-react'
 import { useOPFS } from '../hooks/useOPFS'
 import { PaperCard } from './PaperCard'
+import type { useLibrary } from '../hooks/useLibrary'
 
 interface LibraryViewProps {
   onOpenPaper: (id: string) => void
+  library: ReturnType<typeof useLibrary>
 }
 
-export function LibraryView({ onOpenPaper }: LibraryViewProps) {
-  const { savedPapers, loading, removePaper } = useLibrary()
+export function LibraryView({ onOpenPaper, library }: LibraryViewProps) {
+  const { savedPapers, loading, removePaper } = library
   const { paperExists } = useOPFS()
   const [cachedPapers, setCachedPapers] = useState<Set<string>>(new Set())
 

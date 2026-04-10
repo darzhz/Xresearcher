@@ -2,6 +2,15 @@ export interface Section {
   id: string
   title: string
   content: string
+  full_text?: string
+  type?: 'abstract' | 'introduction' | 'methodology' | 'results' | 'discussion' | 'conclusion' | 'references' | 'other'
+}
+
+export interface PageIndexSection {
+  id: string
+  title: string
+  full_text: string
+  type: 'abstract' | 'introduction' | 'methodology' | 'results' | 'discussion' | 'conclusion' | 'references' | 'other'
 }
 
 export interface PaperData {
@@ -33,6 +42,7 @@ export interface ArxivMetadata {
   authors: string[]
   published: string
   summary: string
+  tldr?: string
   categories: string[]
   pdfUrl: string
   htmlUrl: string

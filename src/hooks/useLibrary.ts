@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { ArxivMetadata, SavedPaper, Collection } from '../types'
+import type { ArxivMetadata, SavedPaper, Collection, PageIndexSection } from '../types'
 import {
   getAllSavedPapers,
   getCollections,
@@ -7,14 +7,16 @@ import {
   deleteCollection as dbDeleteCollection,
   addPaperToCollection,
   removePaperFromCollection,
-  deletePaper as dbDeletePaper
+  savePaperMetadata
 } from '../lib/db'
 import { savePaper as savePaperToStorage, deletePaperCompletely } from '../lib/paperStorage'
+import { summarizePageIndex } from '../lib/llm/summarize'
 
 export function useLibrary() {
   const [savedPapers, setSavedPapers] = useState<SavedPaper[]>([])
   const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
+  const [summarizeProgress, setSummarizeProgress] = useState<{ pct: number; stage: string } | null>(null)
 
   // Load initial data
   useEffect(() => {
@@ -30,10 +32,33 @@ export function useLibrary() {
 
   const savePaper = useCallback(async (meta: ArxivMetadata) => {
     try {
-      await savePaperToStorage(meta)
+      const paperData = await savePaperToStorage(meta)
       // Refresh list
       const papers = await getAllSavedPapers()
       setSavedPapers(papers)
+
+      if (paperData) {
+        // Background summarization — non-blocking
+        summarizePageIndex(paperData.sections as PageIndexSection[], {
+          onToken: token => {
+            setSavedPapers(prev => prev.map(p => 
+              p.id === meta.id 
+                ? { ...p, tldr: (p.tldr ?? '') + token }
+                : p
+            ))
+          },
+          onProgress: (pct, stage) => {
+            setSummarizeProgress({ pct, stage })
+          }
+        }).then(async (final) => {
+          const updatedPaper: SavedPaper = { ...meta, tldr: final, savedAt: Date.now(), collectionIds: [], opfsReady: true }
+          await savePaperMetadata(updatedPaper)
+          setSummarizeProgress(null)
+          // Final refresh
+          const finalPapers = await getAllSavedPapers()
+          setSavedPapers(finalPapers)
+        })
+      }
     } catch (error) {
       console.error('Failed to save paper:', error)
       throw error
@@ -103,6 +128,7 @@ export function useLibrary() {
     savedPapers,
     collections,
     loading,
+    summarizeProgress,
     savePaper,
     removePaper,
     isPaperSaved,

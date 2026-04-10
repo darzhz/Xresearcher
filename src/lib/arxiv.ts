@@ -209,6 +209,21 @@ export async function fetchDailyFeed(
   })
 }
 
+function detectSectionType(title: string, id: string): 'abstract' | 'introduction' | 'methodology' | 'results' | 'discussion' | 'conclusion' | 'references' | 'other' {
+  const t = title.toLowerCase()
+  const i = id.toLowerCase()
+
+  if (t.includes('abstract') || i.includes('abstract')) return 'abstract'
+  if (t.includes('introduction') || i.includes('introduction')) return 'introduction'
+  if (t.includes('method') || t.includes('approach') || t.includes('experiment') || i.includes('method')) return 'methodology'
+  if (t.includes('result') || t.includes('finding') || i.includes('result')) return 'results'
+  if (t.includes('discussion') || i.includes('analysis') || i.includes('discussion')) return 'discussion'
+  if (t.includes('conclusion') || i.includes('conclusion')) return 'conclusion'
+  if (t.includes('reference') || t.includes('bibliography') || i.includes('bib')) return 'references'
+  
+  return 'other'
+}
+
 /**
  * Fetch paper HTML from ar5iv and parse it into PaperData.
  */
@@ -234,19 +249,26 @@ export async function fetchAr5ivPaper(arxivId: string) {
 
   const title = doc.querySelector('.ltx_title_document')?.textContent?.trim() || 'Untitled'
 
-  // FIX: Target the specific person name class used by LaTeXML/ar5iv
+  // Target the specific person name class used by LaTeXML/ar5iv
   const authors = Array.from(doc.querySelectorAll('.ltx_personname'))
     .map(el => el.textContent?.trim())
     .filter(Boolean) as string[]
 
-  // IMPROVEMENT: Handle sections more accurately
-  // ar5iv sections usually have the .ltx_section class
-  const sections = Array.from(doc.querySelectorAll('section, .ltx_section')).map(section => ({
-    id: section.id || `section-${Math.random()}`,
-    // LaTeXML uses .ltx_title for section headings
-    title: section.querySelector('.ltx_title, h1, h2, h3')?.textContent?.trim() || 'Untitled',
-    content: section.textContent || ''
-  }))
+  // Handle sections more accurately
+  const sections = Array.from(doc.querySelectorAll('section, .ltx_section, .ltx_abstract')).map(section => {
+    const id = section.id || `section-${Math.random()}`
+    const sTitle = section.querySelector('.ltx_title, h1, h2, h3')?.textContent?.trim() || 
+                  (section.classList.contains('ltx_abstract') ? 'Abstract' : 'Untitled')
+    const content = section.textContent || ''
+    
+    return {
+      id,
+      title: sTitle,
+      content,
+      full_text: content,
+      type: detectSectionType(sTitle, id)
+    }
+  })
 
   return {
     id: arxivId,

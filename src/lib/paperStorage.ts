@@ -1,4 +1,4 @@
-import type { ArxivMetadata, SavedPaper, PageIndex, PaperData } from '../types'
+import type { ArxivMetadata, SavedPaper, PageIndex, PaperData, Section } from '../types'
 import { savePaperMetadata, deletePaper as dbDeletePaper } from './db'
 import { fetchAr5ivPaper } from './arxiv'
 
@@ -45,7 +45,7 @@ function buildPageIndex(paper: PaperData): PageIndex {
  * 4. Build and save PageIndex to OPFS
  * 5. Update Dexie with opfsReady flag
  */
-export async function savePaper(meta: ArxivMetadata): Promise<void> {
+export async function savePaper(meta: ArxivMetadata): Promise<PaperData | null> {
   if (!opfsOps) {
     throw new Error('paperStorage not initialized')
   }
@@ -65,7 +65,7 @@ export async function savePaper(meta: ArxivMetadata): Promise<void> {
 
     // 3. Save HTML to OPFS
     const htmlString = `<html><head><title>${paperData.title}</title></head><body>${
-      paperData.sections.map(s => `<section id="${s.id}"><h2>${s.title}</h2><p>${s.content}</p></section>`).join('')
+      paperData.sections.map(s => `<section id="${s.id}" data-type="${s.type}"><h2>${s.title}</h2><p>${s.content}</p></section>`).join('')
     }</body></html>`
     await opfsOps.savePaperHTML(meta.id, htmlString)
 
@@ -76,9 +76,12 @@ export async function savePaper(meta: ArxivMetadata): Promise<void> {
     // 5. Update opfsReady flag
     savedPaper.opfsReady = true
     await savePaperMetadata(savedPaper)
+
+    return paperData
   } catch (error) {
     console.error(`Failed to save paper ${meta.id} to OPFS:`, error)
     // Keep the metadata in Dexie even if OPFS save fails; user can try again
+    return null
   }
 }
 
@@ -98,11 +101,20 @@ export async function loadPaperFromOPFS(id: string): Promise<PaperData | null> {
     const doc = parser.parseFromString(html, 'text/html')
 
     const title = doc.querySelector('title')?.textContent || 'Untitled'
-    const sections = Array.from(doc.querySelectorAll('section')).map(section => ({
-      id: section.id || `section-${Math.random()}`,
-      title: section.querySelector('h2')?.textContent?.trim() || 'Untitled',
-      content: section.querySelector('p')?.textContent || ''
-    }))
+    const sections: Section[] = Array.from(doc.querySelectorAll('section')).map(section => {
+      const id = section.id || `section-${Math.random()}`
+      const sTitle = section.querySelector('h2')?.textContent?.trim() || 'Untitled'
+      const content = section.querySelector('p')?.textContent || ''
+      const type = section.getAttribute('data-type') as any
+      
+      return {
+        id,
+        title: sTitle,
+        content,
+        full_text: content,
+        type: type || 'other'
+      }
+    })
 
     return {
       id,

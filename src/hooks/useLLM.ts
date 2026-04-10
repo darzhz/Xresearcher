@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ModelConfig } from '../lib/models'
+import * as engine from '../lib/llm/engine'
 
 export function useLLM() {
-  const workerRef = useRef<Worker | null>(null)
-  const [initialized, setInitialized] = useState(false)
+  const [initialized, setInitialized] = useState(engine.isInitialized())
   const [error, setError] = useState<string | null>(null)
   const [initProgress, setInitProgress] = useState<string>('')
   const [initLoadingPercent, setInitLoadingPercent] = useState(0)
@@ -11,123 +11,45 @@ export function useLLM() {
   const [activeModel, setActiveModel] = useState<ModelConfig | null>(null)
 
   useEffect(() => {
-    // Initialize worker (but don't download model yet)
-    try {
-      workerRef.current = new Worker(
-        new URL('../workers/llm.worker.ts', import.meta.url),
-        { type: 'module' }
-      )
-
-      workerRef.current.onmessage = (event) => {
-        const { type, message, progress, error: workerError } = event.data
-        console.log(`[useLLM] Received message: ${type}`, event.data)
-
-        switch (type) {
-          case 'init-progress':
-            setInitProgress(message || '')
-            if (progress !== undefined) {
-              setInitLoadingPercent(progress)
-            }
-            setIsDownloading(true)
-            break
-
-          case 'init-complete':
-            setInitialized(true)
-            setInitProgress('Model ready!')
-            setIsDownloading(false)
-            break
-
-          case 'summarize-progress':
-            // Can be used to show summarization progress in UI
-            console.log(`[useLLM] Summarization progress for section ${event.data.sectionId}:`, message)
-            break
-
-          case 'error':
-            setError(workerError || 'Worker error')
-            setIsDownloading(false)
-            break
-        }
-      }
-
-      workerRef.current.onerror = (event) => {
-        console.error('Worker error:', event)
-        setError(`Worker error: ${event.message}`)
-        setIsDownloading(false)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initialize worker')
-    }
-
-    return () => {
-      workerRef.current?.terminate()
+    // Sync with engine initialization state
+    if (engine.isInitialized()) {
+      setInitialized(true)
     }
   }, [])
 
-  const downloadModel = useCallback((config: ModelConfig) => {
-    if (!workerRef.current) {
-      setError('Worker not initialized')
-      return
-    }
-
+  const downloadModel = useCallback(async (config: ModelConfig) => {
     setError(null)
     setInitProgress('Starting download...')
     setIsDownloading(true)
     setActiveModel(config)
 
-    // Trigger model download in worker with selected model
-    workerRef.current.postMessage({
-      type: 'init',
-      modelId: config.repoId,
-      filename: config.filename
-    })
+    try {
+      await engine.initialize(config.repoId, config.filename, (data) => {
+        if (data.message) setInitProgress(data.message)
+        if (data.progress !== undefined) setInitLoadingPercent(data.progress)
+      })
+      setInitialized(true)
+      setInitProgress('Model ready!')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load model')
+    } finally {
+      setIsDownloading(false)
+    }
   }, [])
 
   const summarize = useCallback(
     async (text: string, sectionId: string): Promise<string> => {
-      if (!workerRef.current) {
-        throw new Error('Worker not initialized')
-      }
-
-      if (!initialized) {
+      if (!engine.isInitialized()) {
         throw new Error('Model is not loaded. Please download the AI model first.')
       }
 
-      return new Promise((resolve, reject) => {
-        console.log(`[useLLM] Requesting summary for section: ${sectionId}`, { textLength: text.length })
-        const timeout = setTimeout(() => {
-          handler()
-          reject(new Error('Summarization timeout (exceeded 5 minutes)'))
-        }, 300000) // 5 minute timeout
-
-        const handler = () => {
-          clearTimeout(timeout)
-          workerRef.current?.removeEventListener('message', listener)
-        }
-
-        const listener = (event: MessageEvent) => {
-          if (event.data.sectionId === sectionId) {
-            if (event.data.type === 'summary-complete') {
-              console.log(`[useLLM] Summary received for section: ${sectionId}`)
-              handler()
-              resolve(event.data.summary)
-            } else if (event.data.type === 'error') {
-              console.error(`[useLLM] Error received for section: ${sectionId}`, event.data.error)
-              handler()
-              reject(new Error(event.data.error))
-            }
-            // Ignore other message types for this section (like summarize-progress)
-          }
-        }
-
-        workerRef.current?.addEventListener('message', listener)
-        workerRef.current?.postMessage({
-          type: 'summarize',
-          text,
-          sectionId
-        })
-      })
+      return engine.inferStream(
+        `Summarize this text in 2-3 sentences:\n\n${text}\n\nSummary:`,
+        () => {}, // Individual tokens not needed for the old summarize call
+        { maxTokens: 100, temperature: 0.2 }
+      )
     },
-    [initialized]
+    []
   )
 
   return {

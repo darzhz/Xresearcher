@@ -60,9 +60,14 @@ export function PaperCard({
           {paper.authors.length > 3 && ` [et al.]`}
         </p>
 
-        {/* Abstract snippet */}
+        {/* Abstract snippet or TLDR */}
         <p className="text-sm font-body text-ink/80 leading-relaxed text-justify hyphens-auto">
-          {truncateText(paper.summary)}
+          {paper.tldr ? (
+            <>
+              <span className="font-mono text-[10px] uppercase font-black tracking-widest text-editorial mr-2">TLDR:</span>
+              {paper.tldr}
+            </>
+          ) : truncateText(paper.summary)}
         </p>
 
         <div className="mt-auto pt-6 flex items-center justify-between border-t border-divider">

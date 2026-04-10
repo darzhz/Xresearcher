@@ -38,21 +38,26 @@ export function CategoryPicker({
 
   return (
     <div className="fixed inset-0 bg-ink/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-paper border-4 border-ink p-8 max-w-2xl w-full shadow-[8px_8px_0px_0px_#111111] relative max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-8 border-b-2 border-ink pb-4">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-display font-black uppercase tracking-tighter italic">Topic Selection Ledger</h2>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/60">Subscription Directory for Research Dispatches</p>
+      <div className="bg-paper border-4 border-ink max-w-2xl w-full shadow-[8px_8px_0px_0px_#111111] relative max-h-[90vh] flex flex-col">
+        
+        {/* FIXED HEADER */}
+        <div className="p-8 pb-4 border-b-2 border-ink bg-paper z-10">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-3xl font-display font-black uppercase tracking-tighter italic">Topic Selection Ledger</h2>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-ink/60">Subscription Directory for Research Dispatches</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-ink/40 hover:text-editorial transition-colors"
+            >
+              <X size={24} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-ink/40 hover:text-editorial transition-colors"
-          >
-            <X size={24} />
-          </button>
         </div>
 
-        <div className="space-y-10">
+        {/* SCROLLABLE CONTENT */}
+        <div className="flex-1 overflow-y-auto p-8 py-6 space-y-10">
           {/* Common categories */}
           <div className="space-y-4">
             <h3 className="font-mono text-[10px] uppercase font-black tracking-widest text-ink/40 border-b border-divider pb-2">Common Subject Classifications</h3>
@@ -133,7 +138,8 @@ export function CategoryPicker({
           )}
         </div>
 
-        <div className="mt-12 flex justify-end">
+        {/* FIXED FOOTER */}
+        <div className="p-8 pt-4 border-t-2 border-ink bg-paper flex justify-end z-10">
           <button
             onClick={onClose}
             className="group relative px-12 py-4 bg-ink text-paper hover:bg-editorial transition-colors"

@@ -9,11 +9,17 @@ if (typeof (self as any).document === 'undefined') {
 }
 
 interface MessageData {
-  type: 'init' | 'summarize'
+  type: 'init' | 'summarize' | 'infer'
   text?: string
+  prompt?: string
   sectionId?: string
   modelId?: string
   filename?: string
+  params?: {
+    maxTokens?: number
+    temperature?: number
+    stream?: boolean
+  }
 }
 
 let wllama: any = null
@@ -58,6 +64,7 @@ async function initializeModel(
 
     // Load model from Hugging Face with user-selected repo and filename
     await wllama.loadModelFromHF(modelId, filename, {
+      n_ctx: 4096, // Increased context window
       progressCallback: ({ loaded, total }: { loaded: number; total: number }) => {
         const progress = Math.round((loaded / total) * 100)
         self.postMessage({
@@ -101,13 +108,15 @@ ${truncatedText}
 Summary:`
 
   console.log('[Worker] Starting generation for text length:', text.length)
-  console.log('[Worker] Generated prompt:', prompt)
 
   try {
     const startTime = Date.now()
     // Generate summary using wllama
     const summary = await wllama.createCompletion(prompt, {
-      nPredict: 100
+      nPredict: 100,
+      sampling: {
+        temp: 0.2
+      }
     })
     const duration = (Date.now() - startTime) / 1000
 
@@ -123,10 +132,49 @@ Summary:`
 }
 
 /**
+ * General inference function with optional streaming.
+ */
+async function infer(
+  prompt: string,
+  params?: { maxTokens?: number; temperature?: number; stream?: boolean },
+  requestId?: string
+): Promise<string> {
+  if (!wllama || !modelLoaded) {
+    throw new Error('Model not initialized. Call init first.')
+  }
+
+  const { maxTokens = 100, temperature = 0.2, stream = false } = params ?? {}
+
+  try {
+    const output = await wllama.createCompletion(prompt, {
+      nPredict: maxTokens,
+      sampling: {
+        temp: temperature
+      },
+      onNewToken: stream
+        ? (token: number, piece: Uint8Array, currentText: string) => {
+            const tokenText = new TextDecoder().decode(piece)
+            self.postMessage({
+              type: 'token',
+              requestId,
+              token: tokenText
+            })
+          }
+        : undefined
+    })
+
+    return output.trim()
+  } catch (error) {
+    console.error('[Worker] Inference error:', error)
+    throw error
+  }
+}
+
+/**
  * Main message handler
  */
 self.onmessage = async (event: MessageEvent<MessageData>) => {
-  const { type, text, sectionId, modelId, filename } = event.data
+  const { type, text, prompt, sectionId, modelId, filename, params } = event.data
 
   try {
     switch (type) {
@@ -143,7 +191,7 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
         self.postMessage({
           type: 'summarize-progress',
           sectionId,
-          message: 'Generating summary...'
+          message: 'Generating summary…'
         })
 
         const summary = await generateSummary(text)
@@ -155,6 +203,20 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
         })
         break
 
+      case 'infer':
+        if (!prompt) {
+          throw new Error('No prompt provided for inference')
+        }
+
+        const result = await infer(prompt, params, sectionId)
+
+        self.postMessage({
+          type: 'infer-complete',
+          requestId: sectionId,
+          result
+        })
+        break
+
       default:
         throw new Error(`Unknown message type: ${type}`)
     }
@@ -162,6 +224,7 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
     self.postMessage({
       type: 'error',
       sectionId,
+      requestId: sectionId,
       error: error instanceof Error ? error.message : 'Unknown error'
     })
   }

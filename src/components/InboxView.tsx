@@ -2,18 +2,19 @@ import { useEffect, useState } from 'react'
 import { Plus, RefreshCw, Wifi, AlertCircle, Loader, Hash } from 'lucide-react'
 import { useArxiv } from '../hooks/useArxiv'
 import { useInterests } from '../hooks/useInterests'
-import { useLibrary } from '../hooks/useLibrary'
 import { CategoryPicker } from './CategoryPicker'
 import { PaperCard } from './PaperCard'
+import type { useLibrary } from '../hooks/useLibrary'
 
 interface InboxViewProps {
   onOpenPaper: (id: string) => void
+  library: ReturnType<typeof useLibrary>
 }
 
-export function InboxView({ onOpenPaper }: InboxViewProps) {
+export function InboxView({ onOpenPaper, library }: InboxViewProps) {
   const { results, loading, error, hasMore, loadDailyFeed, loadMore } = useArxiv()
   const { interests, addInterest, removeInterest } = useInterests()
-  const { savePaper, isPaperSaved } = useLibrary()
+  const { savePaper, isPaperSaved } = library
   const [showCategoryPicker, setShowCategoryPicker] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 

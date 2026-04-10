@@ -1,4 +1,4 @@
-import { ArrowLeft, Inbox, BookOpen, Newspaper } from 'lucide-react'
+import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader } from 'lucide-react'
 import type { AppView } from '../types'
 
 interface NavBarProps {
@@ -6,13 +6,15 @@ interface NavBarProps {
   onTabChange: (tab: Exclude<AppView, 'reader'>) => void
   isReaderMode: boolean
   onExitReader?: () => void
+  summarizeProgress?: { pct: number; stage: string } | null
 }
 
 export function NavBar({
   activeTab,
   onTabChange,
   isReaderMode,
-  onExitReader
+  onExitReader,
+  summarizeProgress
 }: NavBarProps) {
   const today = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -26,7 +28,22 @@ export function NavBar({
       {/* Top Edition Bar */}
       <div className="border-b border-ink px-4 py-1 flex justify-between items-center text-[10px] font-mono uppercase tracking-widest text-ink/60">
         <span>Vol. XXIV — No. 112</span>
-        <span className="hidden sm:inline">Statistical Inference Driven Research Intelligence</span>
+        <div className="flex items-center gap-4">
+          {summarizeProgress ? (
+            <div className="flex items-center gap-3 text-editorial font-bold animate-pulse">
+              <Loader size={10} className="animate-spin" />
+              <span>{summarizeProgress.stage} ({Math.round(summarizeProgress.pct)}%)</span>
+              <div className="w-24 h-1 bg-divider relative overflow-hidden">
+                <div 
+                  className="absolute inset-y-0 left-0 bg-editorial transition-all duration-500"
+                  style={{ width: `${summarizeProgress.pct}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <span className="hidden sm:inline">Statistical Inference Driven Research Intelligence</span>
+          )}
+        </div>
         <span>{today}</span>
       </div>
 
@@ -35,7 +52,7 @@ export function NavBar({
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center justify-between w-full">
               {/* Left Spacer for centering */}
-              <div className="w-24 hidden sm:block">
+              <div className="w-24  sm:block">
                 {isReaderMode && (
                   <button
                     onClick={onExitReader}
