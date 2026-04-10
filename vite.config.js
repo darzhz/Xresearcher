@@ -74,18 +74,20 @@ export default defineConfig({
     server: {
         port: 5173,
         open: true,
-        proxy: {
-            '/arxiv': {
-                target: 'https://export.arxiv.org',
-                changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/arxiv/, ''),
-            },
-            '/ar5iv': {
-                target: 'https://arxiv.org',
-                changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/ar5iv/, ''),
-            },
+         proxy: {
+        '/api/arxiv': {
+            target: 'https://export.arxiv.org',
+            changeOrigin: true,
+            rewrite: (path) =>
+            path.replace(/^\/api\/arxiv/, '/api/query'),
         },
+        '/api/ar5iv': {
+            target: 'https://arxiv.org',
+            changeOrigin: true,
+            rewrite: (path) =>
+            path.replace(/^\/api\/ar5iv/, ''),
+        },
+    },
     },
     worker: {
         format: 'es'

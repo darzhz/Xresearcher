@@ -1,6 +1,6 @@
 import type { ArxivMetadata, ArxivSearchParams } from '../types'
 
-const ARXIV_API = '/arxiv/api/query?'
+const ARXIV_API = '/api/arxiv?'
 const CORS_PROXIES = [
   'https://corsproxy.io/?',
 ]
