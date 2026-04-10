@@ -1,5 +1,3 @@
-export const runtime = 'edge'
-
 export default async function handler(req: Request) {
   const url = new URL(req.url, "http://localhost")
   const query = url.searchParams.toString()
