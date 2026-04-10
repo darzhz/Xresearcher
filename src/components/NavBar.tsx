@@ -51,7 +51,7 @@ export function NavBar({
               <div className="flex flex-col items-center group cursor-default">
                 <div className="flex items-center gap-3">
                   <Newspaper size={32} className="text-ink group-hover:text-editorial transition-colors" strokeWidth={1.5} />
-                  <h1 className="text-5xl sm:text-7xl font-display font-black text-ink uppercase tracking-tighter text-center">
+                  <h1 className="text-4xl sm:text-7xl font-display font-black text-ink uppercase tracking-tighter text-center">
                     xresearcher
                   </h1>
                 </div>
