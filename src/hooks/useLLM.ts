@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ModelConfig } from '../lib/models'
 import * as engine from '../lib/llm/engine'
+import { summarizeLargeText } from '../lib/llm/summarize'
 
 export function useLLM() {
   const [initialized, setInitialized] = useState(engine.isInitialized())
@@ -38,16 +39,17 @@ export function useLLM() {
   }, [])
 
   const summarize = useCallback(
-    async (text: string, sectionId: string): Promise<string> => {
+    async (text: string, onToken?: (token: string) => void): Promise<string> => {
       if (!engine.isInitialized()) {
         throw new Error('Model is not loaded. Please download the AI model first.')
       }
 
-      return engine.inferStream(
-        `Summarize this text in 2-3 sentences:\n\n${text}\n\nSummary:`,
-        () => {}, // Individual tokens not needed for the old summarize call
-        { maxTokens: 100, temperature: 0.2 }
-      )
+      return summarizeLargeText(text, {
+        onToken,
+        onProgress: (pct, stage) => {
+          console.log(`[useLLM] ${stage}: ${pct.toFixed(0)}%`)
+        }
+      })
     },
     []
   )

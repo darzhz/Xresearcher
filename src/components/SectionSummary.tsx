@@ -9,7 +9,7 @@ interface SectionSummaryProps {
   onToggle: () => void
   initialized: boolean
   llmError: string | null
-  summarize: (text: string, sectionId: string) => Promise<string>
+  summarize: (text: string, onToken?: (token: string) => void) => Promise<string>
 }
 
 type TabType = 'content' | 'summary'
@@ -39,10 +39,15 @@ export function SectionSummary({
 
     setLoading(true)
     setError(null)
+    setActiveTab('summary')
+    
+    let currentText = ''
     try {
-      const result = await summarize(section.content, section.id)
+      const result = await summarize(section.content, (token) => {
+        currentText += token
+        setSummary(currentText)
+      })
       setSummary(result)
-      setActiveTab('summary')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate summary')
       console.error('Failed to generate summary:', err)
@@ -178,24 +183,27 @@ export function SectionSummary({
                   <div className="space-y-6 animate-in fade-in duration-500">
                     <div className="relative">
                       <div className="absolute -left-2 top-0 w-1 h-full bg-editorial opacity-20" />
-                      <p className="text-lg font-body text-ink leading-relaxed text-justify editorial-drop-cap italic">
+                      <p className="text-lg font-body text-ink leading-relaxed text-justify editorial-drop-cap italic whitespace-pre-wrap">
                         {summary}
+                        {loading && <span className="inline-block w-2 h-4 ml-1 bg-editorial animate-pulse" />}
                       </p>
                     </div>
                     
-                    <div className="flex justify-end pt-4 border-t border-divider">
-                      <button
-                        onClick={toggleSpeech}
-                        className={`flex items-center gap-3 px-6 py-3 font-mono text-[10px] uppercase font-black tracking-[0.2em] transition-all ${
-                          isSpeaking
-                            ? 'bg-editorial text-paper'
-                            : 'bg-ink text-paper hover:bg-editorial'
-                        }`}
-                      >
-                        <Volume2 size={14} />
-                        <span>{isSpeaking ? 'Halt Audio' : 'Play Audio'}</span>
-                      </button>
-                    </div>
+                    {!loading && (
+                      <div className="flex justify-end pt-4 border-t border-divider">
+                        <button
+                          onClick={toggleSpeech}
+                          className={`flex items-center gap-3 px-6 py-3 font-mono text-[10px] uppercase font-black tracking-[0.2em] transition-all ${
+                            isSpeaking
+                              ? 'bg-editorial text-paper'
+                              : 'bg-ink text-paper hover:bg-editorial'
+                          }`}
+                        >
+                          <Volume2 size={14} />
+                          <span>{isSpeaking ? 'Halt Audio' : 'Play Audio'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : !initialized ? (
                   <div className="p-8 border-2 border-divider border-dashed text-center">

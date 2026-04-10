@@ -97,15 +97,16 @@ async function generateSummary(text: string): Promise<string> {
   }
 
   // Truncate text if too long to avoid memory issues
-  const maxChars = 2000
+  const maxChars = 4000
   const truncatedText = text.length > maxChars ? text.slice(0, maxChars) + '...' : text
 
   // Prepare prompt for summarization
-  const prompt = `Summarize this text in 2-3 sentences:
-
-${truncatedText}
-
-Summary:`
+  const prompt = `<|im_start|>system
+You are a research assistant. Summarize the following paper fragments into 3 bullet points focusing on the problem and solution.<|im_end|>
+<|im_start|>user
+${truncatedText}<|im_end|>
+<|im_start|>assistant
+Summary:`;
 
   console.log('[Worker] Starting generation for text length:', text.length)
 
@@ -113,7 +114,7 @@ Summary:`
     const startTime = Date.now()
     // Generate summary using wllama
     const summary = await wllama.createCompletion(prompt, {
-      nPredict: 100,
+      nPredict: 120,
       sampling: {
         temp: 0.2
       }

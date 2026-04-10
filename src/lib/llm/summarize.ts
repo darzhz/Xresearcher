@@ -43,6 +43,10 @@ function scoreSentence(s: string, index: number): ScoredSentence {
   // Penalise very short sentences — usually transitional
   if (s.length < 40) score -= 2
 
+  if (/(http|https|www|.com|.org)/.test(s)) score -= 10;
+  
+  if (s.includes('\\')) score -= 5; // Penalize LaTeX/Control codes
+
   return { text: s.trim(), score, originalIndex: index }
 }
 
@@ -56,8 +60,8 @@ function extractDenseText(
   // Sort by signal score descending, pick top sentences up to budget
   scored.sort((a, b) => b.score - a.score)
 
-  const budget = targetTokens * 4  // chars
-  let used = 0
+  // Instead of 3000 tokens (~12k chars), aim for a density ratio
+  const budget = Math.min(text.length * 0.3, targetTokens * 4);  let used = 0
   const selected: ScoredSentence[] = []
 
   for (const s of scored) {
