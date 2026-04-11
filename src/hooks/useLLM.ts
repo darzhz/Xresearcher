@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ModelConfig } from '../lib/models'
+import { MODELS } from '../lib/models'
 import * as engine from '../lib/llm/engine'
 import { summarizeLargeText } from '../lib/llm/summarize'
 
@@ -10,6 +11,32 @@ export function useLLM() {
   const [initLoadingPercent, setInitLoadingPercent] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
   const [activeModel, setActiveModel] = useState<ModelConfig | null>(null)
+
+  // Auto-detect existing model in storage
+  useEffect(() => {
+    const detectModel = async () => {
+      if (engine.isInitialized()) return;
+      
+      try {
+        const root = await navigator.storage.getDirectory()
+        const modelsDir = await root.getDirectoryHandle('models', { create: true })
+        
+        for (const model of MODELS) {
+          try {
+            await modelsDir.getFileHandle(model.filename)
+            // Model file exists in OPFS
+            setActiveModel(model)
+            return
+          } catch {
+            continue
+          }
+        }
+      } catch (e) {
+        console.warn('OPFS model detection failed', e)
+      }
+    }
+    detectModel()
+  }, [])
 
   useEffect(() => {
     // Sync with engine initialization state
@@ -54,6 +81,17 @@ export function useLLM() {
     []
   )
 
+  const queryLLM = useCallback(
+    async (prompt: string, onToken?: (token: string) => void): Promise<string> => {
+      if (!engine.isInitialized()) {
+        throw new Error('Model is not loaded. Please download the AI model first.')
+      }
+
+      return engine.inferStream(prompt, onToken || (() => {}))
+    },
+    []
+  )
+
   return {
     initialized,
     error,
@@ -62,6 +100,7 @@ export function useLLM() {
     isDownloading,
     activeModel,
     downloadModel,
-    summarize
+    summarize,
+    queryLLM
   }
 }

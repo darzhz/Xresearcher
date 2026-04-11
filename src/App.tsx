@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+import { AlertCircle } from 'lucide-react'
 import { NavBar } from './components/NavBar'
 import { InboxView } from './components/InboxView'
 import { LibraryView } from './components/LibraryView'
 import { PaperInput } from './components/PaperInput'
 import { PaperOutline } from './components/PaperOutline'
 import { SummaryView } from './components/SummaryView'
+import { XReChat } from './components/XReChat'
 import { ModelDownloadModal } from './components/ModelDownloadModal'
 import { useOPFS } from './hooks/useOPFS'
 import { useLLM } from './hooks/useLLM'
@@ -150,7 +152,17 @@ function App() {
                     llmError={llmError}
                     summarize={summarize}
                   />
-                </div>
+
+                  {/* PageIndex Traversal Chat */}
+                  <div className="mt-16 border-t-2 border-ink/10 pt-12">
+                    <div className="mb-6 flex items-center gap-4">
+                      <div className="h-8 w-2 bg-ink" />
+                      <h2 className="font-mono uppercase tracking-[0.2em] text-sm font-bold">XReChat In-Document Traversal</h2>
+                    </div>
+                    <XReChat paperId={readerPaper.id} initialized={initialized} />
+                  </div>
+                  </div>
+
               </div>
               {/* Paper search bar in reader */}
               <div className="border-4 border-ink p-6 sm:p-10 bg-paper hard-shadow-hover transition-all">
@@ -211,7 +223,29 @@ function App() {
           </div>
           <div className="p-8 bg-editorial/5">
              <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] font-black mb-4 text-editorial">Notice</h4>
-             <p className="text-[10px] leading-relaxed">Knowledge synthesis is executed via offline inference engines. Accuracy is a function of the active model’s architecture.</p>
+             {!initialized ? (
+               <button 
+                onClick={() => setShowModelModal(true)}
+                className="flex flex-col items-start text-left group"
+               >
+                 <p className="text-[10px] leading-relaxed mb-3 group-hover:text-editorial transition-colors">
+                   Knowledge synthesis is executed via offline inference engines. Accuracy is a function of the active model’s architecture.
+                 </p>
+                 <div className="flex items-center gap-2 px-2 py-1 border border-editorial bg-editorial text-paper font-mono text-[9px] uppercase tracking-tighter group-hover:bg-ink group-hover:border-ink transition-all">
+                   <AlertCircle size={10} />
+                   <span>{activeModel ? `${activeModel.label} Stored` : 'Model Offline'} — Setup Engine</span>
+                 </div>
+               </button>
+             ) : (
+               <div className="flex flex-col items-start gap-2">
+                 <p className="text-[10px] leading-relaxed">
+                   Knowledge synthesis is executed via offline inference engines. Accuracy is a function of the active model’s architecture.
+                 </p>
+                 <div className="flex items-center gap-2 px-2 py-1 border border-ink bg-ink text-paper font-mono text-[9px] uppercase tracking-tighter">
+                   <span>Active: {activeModel?.label || 'Local Inference Engine'}</span>
+                 </div>
+               </div>
+             )}
           </div>
         </div>
       </footer>

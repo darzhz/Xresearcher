@@ -66,10 +66,14 @@ export interface InterestCategory {
 }
 
 export interface PageIndex {
-  [sectionId: string]: {
-    title: string
-    content: string
-  }
+  id: string; // arXiv ID
+  sections: {
+    id: string;
+    title: string;
+    content: string;
+    tokenCount: number;
+    type?: string;
+  }[];
 }
 
 export type AppView = 'inbox' | 'library' | 'reader'

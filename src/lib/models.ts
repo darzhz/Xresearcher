@@ -5,7 +5,7 @@ export interface ModelConfig {
   sizeGB: number
 }
 
-export const PRESET_MODELS: ModelConfig[] = [
+export const MODELS: ModelConfig[] = [
    {
     repoId: 'LiquidAI/LFM2-350M-GGUF',
     filename: 'LFM2-350M-Q4_0.gguf',
@@ -38,7 +38,7 @@ export const PRESET_MODELS: ModelConfig[] = [
   }
 ]
 
-export const DEFAULT_MODEL = PRESET_MODELS[0]
+export const DEFAULT_MODEL = MODELS[0]
 
 export function saveModelConfig(config: ModelConfig) {
   localStorage.setItem('xresearcher_model_config', JSON.stringify(config))

@@ -1,6 +1,7 @@
 import type { ArxivMetadata, SavedPaper, PageIndex, PaperData, Section } from '../types'
 import { savePaperMetadata, deletePaper as dbDeletePaper } from './db'
 import { fetchAr5ivPaper } from './arxiv'
+import { createPageIndex, savePageIndex } from './indexer'
 
 /**
  * OPFS and Dexie operations are passed in via closures to avoid tight coupling with hooks.
@@ -24,25 +25,11 @@ export function initializePaperStorage(ops: typeof opfsOps) {
 }
 
 /**
- * Build a PageIndex from a PaperData object.
- */
-function buildPageIndex(paper: PaperData): PageIndex {
-  const index: PageIndex = {}
-  paper.sections.forEach(section => {
-    index[section.id] = {
-      title: section.title,
-      content: section.content
-    }
-  })
-  return index
-}
-
-/**
  * Orchestrate the full "Save for Later" workflow:
  * 1. Save metadata to Dexie
  * 2. Fetch ar5iv HTML in background
  * 3. Write HTML to OPFS
- * 4. Build and save PageIndex to OPFS
+ * 4. Build and save PageIndex to Dexie & OPFS
  * 5. Update Dexie with opfsReady flag
  */
 export async function savePaper(meta: ArxivMetadata): Promise<PaperData | null> {
@@ -70,8 +57,9 @@ export async function savePaper(meta: ArxivMetadata): Promise<PaperData | null> 
     await opfsOps.savePaperHTML(meta.id, htmlString)
 
     // 4. Build and save PageIndex
-    const pageIndex = buildPageIndex(paperData)
-    await opfsOps.savePaperIndex(meta.id, pageIndex)
+    const pageIndex = createPageIndex(meta.id, paperData.sections)
+    await savePageIndex(pageIndex) // Save to Dexie
+    await opfsOps.savePaperIndex(meta.id, pageIndex) // Also save to OPFS for backup
 
     // 5. Update opfsReady flag
     savedPaper.opfsReady = true

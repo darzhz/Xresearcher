@@ -1,17 +1,19 @@
 import Dexie, { Table } from 'dexie'
-import type { SavedPaper, Collection, InterestCategory } from '../types'
+import type { SavedPaper, Collection, InterestCategory, PageIndex } from '../types'
 
 export class AppDatabase extends Dexie {
   papers!: Table<SavedPaper>
   collections!: Table<Collection>
   interests!: Table<InterestCategory>
+  pageIndices!: Table<PageIndex>
 
   constructor() {
     super('xresearch-db')
-    this.version(1).stores({
+    this.version(2).stores({
       papers: 'id, title, published, savedAt, *authors, *categories, *collectionIds, opfsReady',
       collections: '++id, name, createdAt',
-      interests: 'category, addedAt'
+      interests: 'category, addedAt',
+      pageIndices: 'id'
     })
   }
 }

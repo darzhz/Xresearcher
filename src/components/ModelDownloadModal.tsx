@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Zap, HardDrive, CheckCircle2, AlertCircle, Download, X } from 'lucide-react'
-import { PRESET_MODELS, loadModelConfig, saveModelConfig } from '../lib/models'
+import { MODELS, loadModelConfig, saveModelConfig } from '../lib/models'
 import type { ModelConfig } from '../lib/models'
 
 interface ModelDownloadModalProps {
@@ -110,7 +110,7 @@ export function ModelDownloadModal({
           {/* Model selection */}
           {!isDownloading && !error && (
             <div className="mb-8 space-y-0 border-ink border-l border-t newsprint-grid">
-              {PRESET_MODELS.map((model) => (
+              {MODELS.map((model) => (
                 <label
                   key={model.repoId}
                   className={`flex items-start gap-4 p-4 cursor-pointer transition-colors ${

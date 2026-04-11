@@ -64,7 +64,7 @@ async function initializeModel(
 
     // Load model from Hugging Face with user-selected repo and filename
     await wllama.loadModelFromHF(modelId, filename, {
-      n_ctx: 4096, // Increased context window
+      n_ctx: 8192, 
       progressCallback: ({ loaded, total }: { loaded: number; total: number }) => {
         const progress = Math.round((loaded / total) * 100)
         self.postMessage({
