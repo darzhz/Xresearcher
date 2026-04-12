@@ -41,9 +41,9 @@ export function useLibrary() {
         // Background summarization — non-blocking
         summarizePageIndex(paperData.sections as PageIndexSection[], {
           onToken: token => {
-            setSavedPapers(prev => prev.map(p => 
+           setSavedPapers(prev => prev.map(p => 
               p.id === meta.id 
-                ? { ...p, tldr: (p.tldr ?? '') + token }
+                ? { ...p, tldr: { summary: (p.tldr?.summary ?? '') + token, metrics: p.tldr?.metrics } }
                 : p
             ))
           },

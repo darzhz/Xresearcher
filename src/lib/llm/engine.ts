@@ -17,7 +17,8 @@ export function getWorker() {
 export async function initialize(
   modelId: string,
   filename: string,
-  onProgress?: (data: any) => void
+  onProgress?: (data: any) => void,
+  preferredBackend?: 'webgpu' | 'wasm'
 ): Promise<void> {
   const w = getWorker()
 
@@ -38,7 +39,7 @@ export async function initialize(
     }
 
     w.addEventListener('message', handler)
-    w.postMessage({ type: 'init', modelId, filename })
+    w.postMessage({ type: 'init', modelId, filename, preferredBackend })
   })
 }
 
@@ -46,14 +47,14 @@ export async function inferStream(
   prompt: string,
   onToken: (token: string) => void,
   params?: { maxTokens?: number; temperature?: number }
-): Promise<string> {
+): Promise<{ result: string; metrics?: any }> {
   const w = getWorker()
   const requestId = Math.random().toString(36).substring(7)
   let fullText = ''
 
   return new Promise((resolve, reject) => {
     const listener = (event: MessageEvent) => {
-      const { type, requestId: respId, token, result, error } = event.data
+      const { type, requestId: respId, token, result, error, metrics } = event.data
 
       if (respId !== requestId) return
 
@@ -62,7 +63,7 @@ export async function inferStream(
         onToken(token)
       } else if (type === 'infer-complete') {
         w.removeEventListener('message', listener)
-        resolve(result)
+        resolve({ result, metrics })
       } else if (type === 'error') {
         w.removeEventListener('message', listener)
         reject(new Error(error))

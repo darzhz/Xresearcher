@@ -5,7 +5,7 @@ interface SummaryViewProps {
   paper: PaperData
   initialized: boolean
   llmError: string | null
-  summarize: (text: string, onToken?: (token: string) => void) => Promise<string>
+  summarize: (text: string, onToken?: (token: string) => void) => Promise<{ summary: string; metrics: any }>
 }
 
 export function SummaryView({ paper, initialized, llmError, summarize }: SummaryViewProps) {

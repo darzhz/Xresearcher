@@ -107,7 +107,7 @@ export async function summarizeLargeText(
     onProgress?: (pct: number, stage: string) => void
     targetTokens?: number
   }
-): Promise<string> {
+): Promise<{ summary: string; metrics: any }> {
   const startTime = performance.now()
   const { onToken, onProgress, targetTokens = 3000 } = opts ?? {}
 
@@ -118,13 +118,13 @@ export async function summarizeLargeText(
   const extractEnd = performance.now()
 
   console.log(`[Summarizer] Stage 1 (Extraction) took ${(extractEnd - extractStart).toFixed(2)}ms`)
-  console.log('[Summarizer] Dense Extracted Text:', dense)
 
   const chunks = chunkText(dense)
   onProgress?.(5, `Processing ${chunks.length} chunks…`)
 
   // Stage 2: rolling window over dense text
   let running = ''
+  let totalTokens = 0
 
   for (let i = 0; i < chunks.length; i++) {
     const chunkStart = performance.now()
@@ -151,28 +151,29 @@ ${chunks[i]}
 
 Summary:`
 
-    let currentChunkOutput = ''
-    await inferStream(
+    const { result, metrics } = await inferStream(
       prompt,
       token => {
-        currentChunkOutput += token
         if (isLast) onToken?.(token)
       },
       { maxTokens: isLast ? 150 : 100, temperature: 0.2 }
     )
-    running = currentChunkOutput.trim()
+    running = result.trim()
+    if (metrics) totalTokens += metrics.tokenCount
     
     const chunkEnd = performance.now()
     console.log(`[Summarizer] Chunk ${i + 1}/${chunks.length} took ${(chunkEnd - chunkStart).toFixed(2)}ms`)
     onProgress?.(pct, `Chunk ${i + 1}/${chunks.length} done`)
   }
 
-  // Stage 3: if only 1 chunk, running IS the final output
-  // If multiple chunks, running is already the synthesis
-  const totalTime = performance.now() - startTime
-  console.log(`[Summarizer] Total summarization took ${totalTime.toFixed(2)}ms`)
+  const totalDuration = performance.now() - startTime
+  const tokPerSec = totalTokens / (totalDuration / 1000)
+
   onProgress?.(100, 'Done')
-  return running
+  return { 
+    summary: running, 
+    metrics: { durationMs: totalDuration, tokenCount: totalTokens, tokPerSec } 
+  }
 }
 
 // ─── Section-aware variant (uses your PageIndex) ──────────────────
@@ -196,7 +197,7 @@ export async function summarizePageIndex(
     onToken?: (token: string) => void
     onProgress?: (pct: number, stage: string) => void
   }
-): Promise<string> {
+): Promise<{ summary: string; metrics: any }> {
   // Concatenate sections in document order, with section boost applied
   // by passing higher-priority section text first to the extractor
   const ordered = [...sections].sort((a, b) => {

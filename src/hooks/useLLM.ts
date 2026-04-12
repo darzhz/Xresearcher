@@ -12,32 +12,6 @@ export function useLLM() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [activeModel, setActiveModel] = useState<ModelConfig | null>(null)
 
-  // Auto-detect existing model in storage
-  useEffect(() => {
-    const detectModel = async () => {
-      if (engine.isInitialized()) return;
-      
-      try {
-        const root = await navigator.storage.getDirectory()
-        const modelsDir = await root.getDirectoryHandle('models', { create: true })
-        
-        for (const model of MODELS) {
-          try {
-            await modelsDir.getFileHandle(model.filename)
-            // Model file exists in OPFS
-            setActiveModel(model)
-            return
-          } catch {
-            continue
-          }
-        }
-      } catch (e) {
-        console.warn('OPFS model detection failed', e)
-      }
-    }
-    detectModel()
-  }, [])
-
   useEffect(() => {
     // Sync with engine initialization state
     if (engine.isInitialized()) {
@@ -55,7 +29,7 @@ export function useLLM() {
       await engine.initialize(config.repoId, config.filename, (data) => {
         if (data.message) setInitProgress(data.message)
         if (data.progress !== undefined) setInitLoadingPercent(data.progress)
-      })
+      }, config.preferredBackend)
       setInitialized(true)
       setInitProgress('Model ready!')
     } catch (err) {
@@ -66,7 +40,7 @@ export function useLLM() {
   }, [])
 
   const summarize = useCallback(
-    async (text: string, onToken?: (token: string) => void): Promise<string> => {
+    async (text: string, onToken?: (token: string) => void): Promise<{ summary: string; metrics: any }> => {
       if (!engine.isInitialized()) {
         throw new Error('Model is not loaded. Please download the AI model first.')
       }
@@ -82,7 +56,7 @@ export function useLLM() {
   )
 
   const queryLLM = useCallback(
-    async (prompt: string, onToken?: (token: string) => void): Promise<string> => {
+    async (prompt: string, onToken?: (token: string) => void): Promise<{ result: string; metrics?: any }> => {
       if (!engine.isInitialized()) {
         throw new Error('Model is not loaded. Please download the AI model first.')
       }

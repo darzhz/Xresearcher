@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Zap, HardDrive, CheckCircle2, AlertCircle, Download, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Zap, HardDrive, CheckCircle2, AlertCircle, Download, X, Cpu } from 'lucide-react'
 import { MODELS, loadModelConfig, saveModelConfig } from '../lib/models'
 import type { ModelConfig } from '../lib/models'
 
@@ -30,25 +30,45 @@ export function ModelDownloadModal({
   const [isCustom, setIsCustom] = useState(false)
   const [customRepo, setCustomRepo] = useState('')
   const [customFilename, setCustomFilename] = useState('')
+  const [hasGPU, setHasGPU] = useState(false)
+  const [forceBackend, setForceBackend] = useState<'webgpu' | 'wasm' | null>(null)
+
+  useEffect(() => {
+    const checkGPU = async () => {
+      if ('gpu' in navigator) {
+        try {
+          const adapter = await (navigator as any).gpu.requestAdapter()
+          setHasGPU(!!adapter)
+        } catch {
+          setHasGPU(false)
+        }
+      }
+    }
+    checkGPU()
+  }, [])
 
   const handleDownload = () => {
+    let config: ModelConfig
     if (isCustom) {
       if (!customRepo || !customFilename) {
         alert('Please enter both repo ID and filename')
         return
       }
-      const customConfig: ModelConfig = {
+      config = {
         repoId: customRepo,
         filename: customFilename,
         label: `Custom: ${customRepo}`,
-        sizeGB: 0
+        sizeGB: 0,
+        preferredBackend: forceBackend || (hasGPU ? 'webgpu' : 'wasm')
       }
-      saveModelConfig(customConfig)
-      onDownload(customConfig)
     } else {
-      saveModelConfig(selectedModel)
-      onDownload(selectedModel)
+      config = { 
+        ...selectedModel, 
+        preferredBackend: forceBackend || selectedModel.preferredBackend 
+      }
     }
+    saveModelConfig(config)
+    onDownload(config)
   }
 
   if (!isOpen) return null
@@ -107,6 +127,32 @@ export function ModelDownloadModal({
             </div>
           </div>
 
+          {/* Backend Toggle */}
+          {!isDownloading && !error && (
+            <div className="mb-6 space-y-2">
+              <label className="font-mono text-[10px] uppercase font-black">Inference Backend</label>
+              <div className="flex border-2 border-ink">
+                <button
+                  onClick={() => setForceBackend('webgpu')}
+                  disabled={!hasGPU}
+                  className={`flex-1 py-2 font-mono text-[10px] uppercase font-black flex items-center justify-center gap-2 transition-colors ${
+                    (forceBackend === 'webgpu' || (!forceBackend && hasGPU)) ? 'bg-ink text-paper' : 'bg-paper text-ink hover:bg-neutral-100 disabled:opacity-30'
+                  }`}
+                >
+                  <Zap size={14} /> WebGPU {hasGPU ? '(Detected)' : '(N/A)'}
+                </button>
+                <button
+                  onClick={() => setForceBackend('wasm')}
+                  className={`flex-1 py-2 font-mono text-[10px] uppercase font-black flex items-center justify-center gap-2 transition-colors ${
+                    (forceBackend === 'wasm' || (!forceBackend && !hasGPU)) ? 'bg-ink text-paper' : 'bg-paper text-ink hover:bg-neutral-100'
+                  }`}
+                >
+                  <Cpu size={14} /> WASM
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Model selection */}
           {!isDownloading && !error && (
             <div className="mb-8 space-y-0 border-ink border-l border-t newsprint-grid">
@@ -147,7 +193,7 @@ export function ModelDownloadModal({
                   className="mt-1 accent-editorial sr-only"
                 />
                 <div className="text-sm flex-1">
-                  <p className="font-display font-bold uppercase tracking-tight leading-none mb-1">Custom GGUF Archive</p>
+                  <p className="font-display font-bold uppercase tracking-tight leading-none mb-1">Custom ONNX Archive</p>
                   <p className={`font-mono text-[10px] ${isCustom ? 'text-paper/60' : 'text-ink/40'}`}>Use external HF repository</p>
                 </div>
               </label>

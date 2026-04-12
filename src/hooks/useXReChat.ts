@@ -1,10 +1,9 @@
 import { useState, useCallback } from 'react'
-import { useLLM } from './useLLM'
+import * as engine from '../lib/llm/engine'
 import { getPageIndex, isRelevant } from '../lib/indexer'
 
 export function useXReChat(paperId: string) {
-  const { queryLLM } = useLLM()
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; metrics?: any }[]>([])
   const [loading, setLoading] = useState(false)
   const [readingSections, setReadingSections] = useState<string[]>([])
 
@@ -57,9 +56,9 @@ ANSWER:
 `.trim()
 
       // 4. Query LLM
-      const response = await queryLLM(prompt)
+      const { result, metrics } = await engine.inferStream(prompt, () => {})
       
-      setMessages(prev => [...prev, { role: 'assistant', content: response || 'No response from model.' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: result || 'No response from model.', metrics }])
     } catch (error) {
       console.error('Chat error:', error)
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }])
@@ -67,7 +66,7 @@ ANSWER:
       setLoading(false)
       setReadingSections([])
     }
-  }, [paperId, queryLLM])
+  }, [paperId])
 
   const clearChat = useCallback(() => {
     setMessages([])

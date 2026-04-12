@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { Zap } from 'lucide-react'
 import { useXReChat } from '../hooks/useXReChat'
 
 interface XReChatProps {
@@ -65,6 +66,11 @@ export function XReChat({ paperId, initialized }: XReChatProps) {
                <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-widest text-ink/40">
                 {msg.role === 'user' ? 'Researcher' : 'XReChat-1.5B'}
                </span>
+               {msg.metrics && (
+                 <span className="font-mono text-[8px] sm:text-[9px] text-editorial/60 flex items-center gap-1 uppercase">
+                   <Zap size={8} /> {msg.metrics.tokPerSec.toFixed(1)} tok/s
+                 </span>
+               )}
             </div>
             <div 
               className={`max-w-[90%] sm:max-w-[85%] p-3 sm:p-4 border-2 border-ink ${

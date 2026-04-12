@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ChevronDown, Volume2, Loader, AlertCircle, Download, BookText, Sparkles } from 'lucide-react'
+import { ChevronDown, Volume2, Loader, AlertCircle, Download, BookText, Sparkles, Zap } from 'lucide-react'
 import { Section } from '../types'
 import { splitIntoSentences, queueSpeechSentences } from '../lib/textChunking'
 
@@ -9,7 +9,7 @@ interface SectionSummaryProps {
   onToggle: () => void
   initialized: boolean
   llmError: string | null
-  summarize: (text: string, onToken?: (token: string) => void) => Promise<string>
+  summarize: (text: string, onToken?: (token: string) => void) => Promise<{ summary: string; metrics: any }>
 }
 
 type TabType = 'content' | 'summary'
@@ -23,6 +23,7 @@ export function SectionSummary({
   summarize
 }: SectionSummaryProps) {
   const [summary, setSummary] = useState<string | null>(null)
+  const [metrics, setMetrics] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,7 +31,7 @@ export function SectionSummary({
   const speechControllerRef = useRef<{ cancel: () => void } | null>(null)
 
   const generateSummary = async () => {
-    if (summary) return
+    if (summary && !loading) return
 
     if (!initialized) {
       setError('Model is still loading. Please wait...')
@@ -43,11 +44,12 @@ export function SectionSummary({
     
     let currentText = ''
     try {
-      const result = await summarize(section.content, (token) => {
+      const { summary: finalSummary, metrics: finalMetrics } = await summarize(section.content, (token) => {
         currentText += token
         setSummary(currentText)
       })
-      setSummary(result)
+      setSummary(finalSummary)
+      setMetrics(finalMetrics)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate summary')
       console.error('Failed to generate summary:', err)
@@ -190,7 +192,17 @@ export function SectionSummary({
                     </div>
                     
                     {!loading && (
-                      <div className="flex justify-end pt-4 border-t border-divider">
+                      <div className="flex justify-between items-center pt-4 border-t border-divider">
+                        <div className="flex items-center gap-4 opacity-40 group hover:opacity-100 transition-opacity">
+                          {metrics && (
+                            <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase font-black tracking-widest">
+                              <Zap size={10} className="text-editorial" />
+                              <span>{metrics.tokPerSec.toFixed(1)} Tok/s</span>
+                              <span className="mx-1">•</span>
+                              <span>{(metrics.durationMs / 1000).toFixed(1)}s</span>
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={toggleSpeech}
                           className={`flex items-center gap-3 px-6 py-3 font-mono text-[10px] uppercase font-black tracking-[0.2em] transition-all ${

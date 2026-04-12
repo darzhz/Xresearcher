@@ -6,8 +6,8 @@ A privacy-centric, local-first Progressive Web App (PWA) that transforms arXiv r
 ## 🏗 System Architecture & Core Principles
 - **Local-First & Privacy-Centric:** All processing (inference, storage, synthesis) happens on the user's device. No telemetry or server-side data extraction.
 - **HTML-First (ar5iv):** Prioritizes the **ar5iv** (HTML) mirror for semantic ingestion over traditional PDF parsing.
-- **On-Device LLM:** Uses **wllama (WASM)** with **Qwen 2.5 1.5B (GGUF)** for stable, privacy-preserving summarization.
-- **Persistence (OPFS & IndexedDB):** Models and paper indices are stored in the **Origin Private File System (OPFS)** for high-performance access. Metadata is managed via **Dexie (IndexedDB)**.
+- **On-Device LLM:** Uses **transformers.js (WebGPU/WASM)** with **Qwen 2.5 1.5B (ONNX)** for stable, privacy-preserving summarization.
+- **Persistence (IndexedDB):** Models are cached in **IndexedDB** for high-performance access. Metadata is managed via **Dexie (IndexedDB)**.
 - **Voice Synthesis:** Leverages the **Web Speech API** for zero-latency, zero-dependency audio streaming.
 
 ## 🛠 Tech Stack
@@ -15,8 +15,9 @@ A privacy-centric, local-first Progressive Web App (PWA) that transforms arXiv r
 | :--- | :--- |
 | **Framework** | React 18 (TypeScript) + Vite |
 | **Styling** | Tailwind CSS (Newsprint aesthetic) |
-| **Inference** | wllama (WASM) / Qwen 2.5 1.5B |
-| **Storage** | OPFS (Files) + Dexie/IndexedDB (Metadata) |
+| Inference | transformers.js (WebGPU/WASM) / Qwen 2.5 1.5B |
+| Storage | IndexedDB (Models) + Dexie/IndexedDB (Metadata) |
+
 | **Networking** | Fetch + CORS Proxy (AllOrigins) |
 | **Offline** | Service Workers (Vite PWA / Workbox) |
 

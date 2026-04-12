@@ -42,7 +42,7 @@ export interface ArxivMetadata {
   authors: string[]
   published: string
   summary: string
-  tldr?: string
+  tldr?: { summary: string; metrics: any; }
   categories: string[]
   pdfUrl: string
   htmlUrl: string
