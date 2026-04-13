@@ -24,6 +24,13 @@ export function PaperCard({
     return result + (text.length > 180 ? '...' : '')
   }
 
+  const getSummaryText = (data: any): string => {
+    if (!data) return ''
+    if (typeof data === 'string') return data
+    if (data.summary) return data.summary
+    return ''
+  }
+
   return (
     <div className="group bg-paper p-6 border-ink hover:bg-neutral-50 transition-all duration-300 flex flex-col h-full relative overflow-hidden hard-shadow-hover">
       {/* Decorative Corner Accent */}
@@ -65,9 +72,9 @@ export function PaperCard({
           {paper.tldr ? (
             <>
               <span className="font-mono text-[10px] uppercase font-black tracking-widest text-editorial mr-2">TLDR:</span>
-              {paper.tldr}
+              {getSummaryText(paper.tldr)}
             </>
-          ) : truncateText(paper.summary)}
+          ) : truncateText(getSummaryText(paper.summary))}
         </p>
 
         <div className="mt-auto pt-6 flex items-center justify-between border-t border-divider">

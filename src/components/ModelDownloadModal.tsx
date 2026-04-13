@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Zap, HardDrive, CheckCircle2, AlertCircle, Download, X, Cpu } from 'lucide-react'
-import { MODELS, loadModelConfig, saveModelConfig } from '../lib/models'
+import { Zap, HardDrive, CheckCircle2, AlertCircle, Download, X, Cpu, Trash2 } from 'lucide-react'
+import { MODELS, loadModelConfig, saveModelConfig, deleteModel, getStorageEstimate } from '../lib/models'
 import type { ModelConfig } from '../lib/models'
 
 interface ModelDownloadModalProps {
@@ -29,9 +29,9 @@ export function ModelDownloadModal({
   const [selectedModel, setSelectedModel] = useState<ModelConfig>(loadModelConfig())
   const [isCustom, setIsCustom] = useState(false)
   const [customRepo, setCustomRepo] = useState('')
-  const [customFilename, setCustomFilename] = useState('')
   const [hasGPU, setHasGPU] = useState(false)
   const [forceBackend, setForceBackend] = useState<'webgpu' | 'wasm' | null>(null)
+  const [storage, setStorage] = useState<{usageGB: string, quotaGB: string} | null>(null)
 
   useEffect(() => {
     const checkGPU = async () => {
@@ -44,22 +44,30 @@ export function ModelDownloadModal({
         }
       }
     }
-    checkGPU()
-  }, [])
+    const checkStorage = async () => {
+      const est = await getStorageEstimate()
+      setStorage(est)
+    }
+    if (isOpen) {
+      checkGPU()
+      checkStorage()
+    }
+  }, [isOpen])
 
   const handleDownload = () => {
     let config: ModelConfig
     if (isCustom) {
-      if (!customRepo || !customFilename) {
-        alert('Please enter both repo ID and filename')
+      if (!customRepo) {
+        alert('Please enter repo ID')
         return
       }
       config = {
         repoId: customRepo,
-        filename: customFilename,
+        filename: 'onnx',
         label: `Custom: ${customRepo}`,
         sizeGB: 0,
-        preferredBackend: forceBackend || (hasGPU ? 'webgpu' : 'wasm')
+        preferredBackend: forceBackend || (hasGPU ? 'webgpu' : 'wasm'),
+        dtype: 'q4'
       }
     } else {
       config = { 
@@ -71,7 +79,16 @@ export function ModelDownloadModal({
     onDownload(config)
   }
 
+  const handleDeleteCache = async () => {
+    if (confirm('Wipe local model cache?')) {
+      await deleteModel('')
+      window.location.reload()
+    }
+  }
+
   if (!isOpen) return null
+
+  const isModelActive = (repoId: string) => currentModel?.repoId === repoId
 
   return (
     <div className="fixed inset-0 bg-ink/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -90,42 +107,35 @@ export function ModelDownloadModal({
           <div className="flex items-center gap-3 mb-2">
             <Download size={24} className="text-ink" />
             <h2 className="text-3xl font-display font-black uppercase tracking-tighter italic">
-              Public Notice
+              Engine Setup
             </h2>
           </div>
           <p className="font-mono text-[10px] uppercase tracking-widest text-ink/60">
-            Subject: Local Intelligence Engine Setup
+            Subject: Local Intelligence Configuration
           </p>
         </div>
 
         {/* SCROLLABLE CONTENT */}
         <div className="flex-1 overflow-y-auto p-8 py-4 newsprint-scrollbar">
+          {storage && (
+            <div className="mb-6 p-3 border border-ink/10 bg-neutral-50 flex items-center justify-between">
+              <span className="font-mono text-[9px] uppercase tracking-widest text-ink/40">Local Storage Usage</span>
+              <span className="font-mono text-[10px] font-black">{storage.usageGB} GB / {storage.quotaGB} GB</span>
+            </div>
+          )}
+
           {/* Show current model if loaded */}
           {currentModel && !isDownloading && !error && (
             <div className="mb-6 p-4 border border-ink bg-neutral-100 flex items-start gap-3">
               <CheckCircle2 size={18} className="text-ink mt-0.5 flex-shrink-0" />
-              <p className="text-xs font-mono uppercase tracking-tight">
-                Active Configuration: <span className="font-black italic">{currentModel.label}</span>
-              </p>
+              <div>
+                <p className="text-xs font-mono uppercase tracking-tight">
+                  Active: <span className="font-black italic">{currentModel.label}</span>
+                </p>
+                <p className="text-[9px] font-mono text-ink/40 uppercase mt-1">Status: Initialized & Running</p>
+              </div>
             </div>
           )}
-
-          <div className="space-y-4 mb-8">
-            <p className="font-body text-sm leading-relaxed text-justify">
-              To enable <span className="font-bold italic">editorial summarization</span> on this device, a local AI model must be retrieved. This process ensures your research remains private and processed strictly within your hardware environment.
-            </p>
-
-            <div className="grid grid-cols-2 gap-4 border-y border-divider py-4">
-              <div className="space-y-1">
-                <p className="font-mono text-[10px] font-black uppercase text-editorial">Security</p>
-                <p className="text-[10px] leading-tight text-ink/60">Zero data exit policy. All inference occurs locally.</p>
-              </div>
-              <div className="space-y-1">
-                <p className="font-mono text-[10px] font-black uppercase text-editorial">Performance</p>
-                <p className="text-[10px] leading-tight text-ink/60">Once cached, summaries are generated instantly.</p>
-              </div>
-            </div>
-          </div>
 
           {/* Backend Toggle */}
           {!isDownloading && !error && (
@@ -161,7 +171,7 @@ export function ModelDownloadModal({
                   key={model.repoId}
                   className={`flex items-start gap-4 p-4 cursor-pointer transition-colors ${
                     !isCustom && selectedModel.repoId === model.repoId ? 'bg-ink text-paper' : 'hover:bg-neutral-100'
-                  }`}
+                  } ${isModelActive(model.repoId) ? 'ring-2 ring-editorial ring-inset' : ''}`}
                 >
                   <input
                     type="radio"
@@ -174,9 +184,12 @@ export function ModelDownloadModal({
                     className="mt-1 accent-editorial sr-only"
                   />
                   <div className="text-sm flex-1">
-                    <p className="font-display font-bold uppercase tracking-tight leading-none mb-1">{model.label}</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-display font-bold uppercase tracking-tight leading-none">{model.label}</p>
+                      {isModelActive(model.repoId) && <span className="text-[9px] bg-editorial text-paper px-1 font-mono uppercase">Live</span>}
+                    </div>
                     <p className={`font-mono text-[10px] ${!isCustom && selectedModel.repoId === model.repoId ? 'text-paper/60' : 'text-ink/40'}`}>
-                      Payload Size: {model.sizeGB ? `${model.sizeGB} GB` : 'Variable'}
+                      Payload: {model.sizeGB} GB | Format: {model.dtype?.toUpperCase()}
                     </p>
                   </div>
                 </label>
@@ -207,19 +220,9 @@ export function ModelDownloadModal({
                 <label className="font-mono text-[10px] uppercase font-black">HF Repository ID</label>
                 <input
                   type="text"
-                  placeholder="meta-llama/Llama-2-7b-hf"
+                  placeholder="onnx-community/Llama-3.2-1B-Instruct"
                   value={customRepo}
                   onChange={(e) => setCustomRepo(e.target.value)}
-                  className="w-full px-3 py-2 border-b-2 border-ink bg-transparent font-mono text-xs focus:outline-none focus:bg-white transition-colors"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-mono text-[10px] uppercase font-black">GGUF Filename</label>
-                <input
-                  type="text"
-                  placeholder="model.gguf"
-                  value={customFilename}
-                  onChange={(e) => setCustomFilename(e.target.value)}
                   className="w-full px-3 py-2 border-b-2 border-ink bg-transparent font-mono text-xs focus:outline-none focus:bg-white transition-colors"
                 />
               </div>
@@ -276,27 +279,36 @@ export function ModelDownloadModal({
                 </button>
               </>
             ) : (
-              <>
+              <div className="flex flex-col gap-4">
                 <button
                   onClick={handleDownload}
-                  className="group relative w-full py-4 bg-ink text-paper hover:bg-editorial transition-colors"
+                  disabled={isModelActive(selectedModel.repoId)}
+                  className={`group relative w-full py-4 transition-colors ${isModelActive(selectedModel.repoId) ? 'bg-neutral-100 text-ink/20 cursor-not-allowed' : 'bg-ink text-paper hover:bg-editorial'}`}
                 >
-                  <span className="relative z-10 font-mono uppercase text-xs font-black tracking-[0.2em]">Initiate Download</span>
-                  <div className="absolute inset-0 border-2 border-ink group-hover:border-editorial translate-x-1 translate-y-1 -z-0 transition-colors" />
+                  <span className="relative z-10 font-mono uppercase text-xs font-black tracking-[0.2em]">
+                    {isModelActive(selectedModel.repoId) ? 'Model Already Active' : 'Initialize & Load Engine'}
+                  </span>
+                  {!isModelActive(selectedModel.repoId) && <div className="absolute inset-0 border-2 border-ink group-hover:border-editorial translate-x-1 translate-y-1 -z-0 transition-colors" />}
                 </button>
-                <button
-                  onClick={onSkip}
-                  className="w-full py-4 text-ink/40 hover:text-ink font-mono uppercase text-[10px] font-black tracking-widest transition-colors"
-                >
-                  Proceed Without AI
-                </button>
-              </>
+                
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={onSkip}
+                    className="flex-1 py-4 border-2 border-ink text-ink font-mono uppercase text-[10px] font-black tracking-widest hover:bg-neutral-50 transition-colors"
+                  >
+                    Close Modal
+                  </button>
+                  <button
+                    onClick={handleDeleteCache}
+                    className="p-4 border-2 border-editorial text-editorial hover:bg-editorial hover:text-paper transition-all"
+                    title="Wipe Local Model Cache"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
-
-          <p className="text-[9px] font-mono text-ink/30 text-center mt-6 uppercase leading-relaxed">
-            Registry: Vol 1.0 // Agrigated by XRESEARCHER ARCHIVE // Printed in Kunnumkulam
-          </p>
         </div>
       </div>
     </div>

@@ -29,7 +29,7 @@ export function useLLM() {
       await engine.initialize(config.repoId, config.filename, (data) => {
         if (data.message) setInitProgress(data.message)
         if (data.progress !== undefined) setInitLoadingPercent(data.progress)
-      }, config.preferredBackend)
+      }, config.preferredBackend, config.dtype)
       setInitialized(true)
       setInitProgress('Model ready!')
     } catch (err) {

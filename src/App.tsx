@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Settings, Trash2 } from 'lucide-react'
 import { NavBar } from './components/NavBar'
 import { InboxView } from './components/InboxView'
 import { LibraryView } from './components/LibraryView'
@@ -15,13 +15,14 @@ import type { PaperData, AppView } from './types'
 import type { ModelConfig } from './lib/models'
 import { fetchAr5ivPaper } from './lib/arxiv'
 import { loadPaperFromOPFS, initializePaperStorage } from './lib/paperStorage'
+import { loadModelConfig, deleteModel } from './lib/models'
 
 function App() {
   const [activeView, setActiveView] = useState<AppView>('inbox')
   const [readerPaper, setReaderPaper] = useState<PaperData | null>(null)
   const [readerLoading, setReaderLoading] = useState(false)
   const [readerError, setReaderError] = useState<string | null>(null)
-  const [showModelModal, setShowModelModal] = useState(true)
+  const [showModelModal, setShowModelModal] = useState(false)
   
   const opfsHooks = useOPFS()
   const { initialized, error: llmError, initProgress, initLoadingPercent, isDownloading, activeModel, downloadModel, summarize } = useLLM()
@@ -39,6 +40,14 @@ function App() {
         paperExists: opfsHooks.paperExists,
         deletePaperFiles: opfsHooks.deletePaperFiles
       })
+
+      // Auto-load model if config exists
+      const savedConfig = loadModelConfig()
+      if (savedConfig && !initialized && !isDownloading) {
+        // We only auto-show if not initialized, but we can also auto-download
+        // For now, let's just show the modal if not initialized to let user confirm
+        setShowModelModal(true)
+      }
     }
     init()
   }, [opfsHooks])
@@ -92,6 +101,13 @@ function App() {
     setShowModelModal(true)
   }
 
+  const handleDeleteModel = async () => {
+    if (confirm('Are you sure you want to clear the local model cache? This will reclaim disk space but require a fresh download.')) {
+      await deleteModel('') // Clears all transformers-cache
+      window.location.reload()
+    }
+  }
+
   return (
     <div className="min-h-screen bg-paper text-ink selection:bg-editorial selection:text-paper">
       {/* Texture Overlay */}
@@ -99,7 +115,7 @@ function App() {
 
       {/* Model Download Modal */}
       <ModelDownloadModal
-        isOpen={showModelModal && !initialized}
+        isOpen={showModelModal}
         isDownloading={isDownloading}
         progress={initLoadingPercent}
         progressMessage={initProgress}
@@ -222,30 +238,32 @@ function App() {
              <p className="text-xs font-mono">Digital Research Newsprint Aggregator</p>
           </div>
           <div className="p-8 bg-editorial/5">
-             <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] font-black mb-4 text-editorial">Notice</h4>
-             {!initialized ? (
-               <button 
-                onClick={() => setShowModelModal(true)}
-                className="flex flex-col items-start text-left group"
-               >
-                 <p className="text-[10px] leading-relaxed mb-3 group-hover:text-editorial transition-colors">
-                   Knowledge synthesis is executed via offline inference engines. Accuracy is a function of the active model’s architecture.
-                 </p>
-                 <div className="flex items-center gap-2 px-2 py-1 border border-editorial bg-editorial text-paper font-mono text-[9px] uppercase tracking-tighter group-hover:bg-ink group-hover:border-ink transition-all">
-                   <AlertCircle size={10} />
-                   <span>{activeModel ? `${activeModel.label} Stored` : 'Model Offline'} — Setup Engine</span>
-                 </div>
-               </button>
-             ) : (
-               <div className="flex flex-col items-start gap-2">
-                 <p className="text-[10px] leading-relaxed">
-                   Knowledge synthesis is executed via offline inference engines. Accuracy is a function of the active model’s architecture.
-                 </p>
-                 <div className="flex items-center gap-2 px-2 py-1 border border-ink bg-ink text-paper font-mono text-[9px] uppercase tracking-tighter">
-                   <span>Active: {activeModel?.label || 'Local Inference Engine'}</span>
-                 </div>
+             <h4 className="font-mono text-[10px] uppercase tracking-[0.2em] font-black mb-4 text-editorial">Local Intelligence</h4>
+             <div className="flex flex-col items-start gap-4">
+               <p className="text-[10px] leading-relaxed">
+                 Knowledge synthesis is executed via offline inference engines. Accuracy is a function of the active model’s architecture.
+               </p>
+               
+               <div className="flex flex-wrap gap-2">
+                 <button 
+                  onClick={() => setShowModelModal(true)}
+                  className="flex items-center gap-2 px-2 py-1 border border-ink bg-ink text-paper font-mono text-[9px] uppercase tracking-tighter hover:bg-editorial hover:border-editorial transition-all"
+                 >
+                   <Settings size={10} />
+                   <span>{initialized ? `Active: ${activeModel?.label}` : 'Setup Engine'}</span>
+                 </button>
+
+                 {initialized && (
+                   <button 
+                    onClick={handleDeleteModel}
+                    className="flex items-center gap-2 px-2 py-1 border border-ink text-ink font-mono text-[9px] uppercase tracking-tighter hover:bg-editorial hover:text-paper hover:border-editorial transition-all"
+                   >
+                     <Trash2 size={10} />
+                     <span>Wipe Cache</span>
+                   </button>
+                 )}
                </div>
-             )}
+             </div>
           </div>
         </div>
       </footer>

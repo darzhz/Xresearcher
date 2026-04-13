@@ -3,6 +3,11 @@
 import { inferStream } from './engine'
 import { PageIndexSection } from '../../types'
 
+const DEBUG = true
+function log(msg: string, data?: any) {
+  if (DEBUG) console.log(`[Summarizer] ${msg}`, data || '')
+}
+
 // ─── Extractive layer ────────────────────────────────────────────
 
 interface ScoredSentence {
@@ -60,8 +65,9 @@ function extractDenseText(
   // Sort by signal score descending, pick top sentences up to budget
   scored.sort((a, b) => b.score - a.score)
 
-  // Instead of 3000 tokens (~12k chars), aim for a density ratio
-  const budget = Math.min(text.length * 0.3, targetTokens * 4);  let used = 0
+  // Minimum 1000 chars budget or 30% of text
+  const budget = Math.max(1000, Math.min(text.length * 0.4, targetTokens * 4));
+  let used = 0
   const selected: ScoredSentence[] = []
 
   for (const s of scored) {
@@ -117,7 +123,7 @@ export async function summarizeLargeText(
   const dense = extractDenseText(text, targetTokens)
   const extractEnd = performance.now()
 
-  console.log(`[Summarizer] Stage 1 (Extraction) took ${(extractEnd - extractStart).toFixed(2)}ms`)
+  log(`Stage 1 (Extraction) took ${(extractEnd - extractStart).toFixed(2)}ms`, { denseLen: dense.length })
 
   const chunks = chunkText(dense)
   onProgress?.(5, `Processing ${chunks.length} chunks…`)
@@ -131,28 +137,22 @@ export async function summarizeLargeText(
     const isLast = i === chunks.length - 1
     const pct = 5 + (i / chunks.length) * 80
 
-    const prompt = running
-      ? `You are building a progressive summary of a research paper.
+    log(`Processing chunk ${i + 1}/${chunks.length}`, { chunkLen: chunks[i].length, runningLen: running.length })
 
-Running summary so far:
-${running}
+    const chatMessages = running
+      ? [
+          { role: 'system', content: 'You are building a progressive summary of a research paper.' },
+          { role: 'user', content: `Running summary so far:\n${running}\n\nNew content to integrate:\n${chunks[i]}\n\n${isLast ? 'Write final complete summary. 4 sentences: problem, method, result, significance.' : 'Update running summary with key info. Under 4 sentences.'}` }
+        ]
+      : [
+          { role: 'system', content: 'You are a research assistant.' },
+          { role: 'user', content: `Summarize opening section of research paper in 3 sentences. Focus on problem and approach.\n\n${chunks[i]}` }
+        ]
 
-New content to integrate:
-${chunks[i]}
-
-${isLast
-  ? 'Write the final complete summary. 4 sentences: problem, method, key result, significance.'
-  : 'Update the running summary to include key new information. Keep it under 4 sentences.'
-}`
-      : `Summarize this opening section of a research paper in 3 sentences.
-Focus on: what problem it addresses and what approach is taken.
-
-${chunks[i]}
-
-Summary:`
+    if (i === 0) log('First chunk messages:', chatMessages)
 
     const { result, metrics } = await inferStream(
-      prompt,
+      chatMessages,
       token => {
         if (isLast) onToken?.(token)
       },
@@ -162,13 +162,14 @@ Summary:`
     if (metrics) totalTokens += metrics.tokenCount
     
     const chunkEnd = performance.now()
-    console.log(`[Summarizer] Chunk ${i + 1}/${chunks.length} took ${(chunkEnd - chunkStart).toFixed(2)}ms`)
+    log(`Chunk ${i + 1}/${chunks.length} done in ${(chunkEnd - chunkStart).toFixed(2)}ms`, { result: running })
     onProgress?.(pct, `Chunk ${i + 1}/${chunks.length} done`)
   }
 
   const totalDuration = performance.now() - startTime
   const tokPerSec = totalTokens / (totalDuration / 1000)
 
+  log('Summarization complete', { finalSummary: running, totalDurationMs: totalDuration })
   onProgress?.(100, 'Done')
   return { 
     summary: running, 

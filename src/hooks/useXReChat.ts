@@ -40,23 +40,22 @@ export function useXReChat(paperId: string) {
 
       // 3. Construct the "Newsprint" Prompt
       const context = relevantSections
-        .map(s => `[[${s.title}]]:\n${s.content.slice(0, 3000)}`)
+        .map(s => `[[${s.title}]]:\n${s.content.slice(0, 1200)}`)
         .join('\n\n')
 
-      const prompt = `
-You are XReChat, a research assistant. 
-Use the following context from a research paper to answer the user's question accurately and concisely.
-If the answer is not in the context, say you don't know based on the provided sections.
-
-CONTEXT:
-${context}
-
-QUESTION: ${query}
-ANSWER:
-`.trim()
+      const chatMessages = [
+        { 
+          role: 'system', 
+          content: 'You are XReChat, a research assistant. Use the provided context from a research paper to answer the user\'s question accurately and concisely. If the answer is not in the context, say you don\'t know.' 
+        },
+        { 
+          role: 'user', 
+          content: `CONTEXT:\n${context}\n\nQUESTION: ${query}` 
+        }
+      ]
 
       // 4. Query LLM
-      const { result, metrics } = await engine.inferStream(prompt, () => {})
+      const { result, metrics } = await engine.inferStream(chatMessages, () => {})
       
       setMessages(prev => [...prev, { role: 'assistant', content: result || 'No response from model.', metrics }])
     } catch (error) {

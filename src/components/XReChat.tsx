@@ -64,7 +64,7 @@ export function XReChat({ paperId, initialized }: XReChatProps) {
           >
             <div className="flex items-center gap-2 mb-1">
                <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-widest text-ink/40">
-                {msg.role === 'user' ? 'Researcher' : 'XReChat-1.5B'}
+                {msg.role === 'user' ? 'Researcher' : 'XReChat'}
                </span>
                {msg.metrics && (
                  <span className="font-mono text-[8px] sm:text-[9px] text-editorial/60 flex items-center gap-1 uppercase">

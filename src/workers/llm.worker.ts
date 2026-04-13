@@ -15,19 +15,28 @@ interface Metrics {
   tokPerSec: number
 }
 
+type QuantDtype = 'auto' | 'q4' | 'q8' | 'fp16' | 'fp32' | 'int8' | 'uint8' | 'bnb4' | 'q4f16'
+
 interface MessageData {
   type: 'init' | 'summarize' | 'infer'
   text?: string
   prompt?: string
+  messages?: { role: string; content: string }[]
   sectionId?: string
   modelId?: string
   filename?: string          // ignored — transformers.js picks quantization internally
   preferredBackend?: 'webgpu' | 'wasm'
+  dtype?: QuantDtype
   params?: {
     maxTokens?: number
     temperature?: number
     stream?: boolean
   }
+}
+
+const DEBUG = true
+function log(msg: string, data?: any) {
+  if (DEBUG) self.postMessage({ type: 'log', message: `[Worker] ${msg}`, data })
 }
 
 let generator: TextGenerationPipeline | null = null
@@ -56,12 +65,14 @@ async function detectBestDevice(): Promise<'webgpu' | 'wasm'> {
 
 async function initializeModel(
   modelId: string = 'Qwen/Qwen2.5-1.5B-Instruct',
-  preferredBackend?: 'webgpu' | 'wasm'
+  preferredBackend?: 'webgpu' | 'wasm',
+  preferredDtype?: QuantDtype
 ): Promise<void> {
   if (modelLoaded) return
 
   const device = preferredBackend || await detectBestDevice()
   activeBackend = device
+  log(`Initializing on ${device}`, { modelId, preferredDtype })
 
   self.postMessage({
     type: 'init-progress',
@@ -70,8 +81,8 @@ async function initializeModel(
     backend: device
   })
 
-  // dtype selection: fp16 for WebGPU (fast + fits VRAM), q8 for WASM (CPU-friendly)
-  const dtype = device === 'webgpu' ? 'fp16' : 'q8'
+  // dtype selection: q4 for WebGPU (safe memory), q8 for WASM (CPU-friendly)
+  const dtype: QuantDtype = preferredDtype || (device === 'webgpu' ? 'q4' : 'q8')
 
   try {
     generator = await pipeline('text-generation', modelId, {
@@ -92,6 +103,7 @@ async function initializeModel(
     }) as TextGenerationPipeline
 
     modelLoaded = true
+    log('Model loaded successfully')
   } catch (error) {
     // If WebGPU was attempted and failed, retry transparently on WASM
     if (device === 'webgpu') {
@@ -117,6 +129,7 @@ async function initializeModel(
         }
       }) as TextGenerationPipeline
       modelLoaded = true
+      log('Fallback to WASM success')
     } else {
       throw new Error(`Failed to load model: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -129,6 +142,7 @@ async function initializeModel(
 
 async function generateSummary(text: string): Promise<{ summary: string; metrics: Metrics }> {
   if (!generator || !modelLoaded) throw new Error('Model not initialized.')
+  log('Generating summary', { textLen: text.length })
 
   const maxChars = 4000
   const truncated = text.length > maxChars ? text.slice(0, maxChars) + '…' : text
@@ -142,7 +156,7 @@ async function generateSummary(text: string): Promise<{ summary: string; metrics
   const output = await generator(messages as any, {
     max_new_tokens: 120,
     temperature: 0.2,
-    do_sample: true,
+    do_sample: false,
   })
   const durationMs = performance.now() - startTime
 
@@ -151,6 +165,8 @@ async function generateSummary(text: string): Promise<{ summary: string; metrics
   const reply = Array.isArray(generated)
     ? (generated.length > 0 ? generated[generated.length - 1]?.content : '') ?? ''
     : String(generated ?? '')
+
+  log('Summary generation result', { replyLen: reply.length })
 
   // Token count
   const tokens = generator.tokenizer.encode(reply)
@@ -168,18 +184,25 @@ async function generateSummary(text: string): Promise<{ summary: string; metrics
 // ---------------------------------------------------------------------------
 
 async function infer(
-  prompt: string,
+  input: string | { role: string; content: string }[],
   params?: { maxTokens?: number; temperature?: number; stream?: boolean },
   requestId?: string
 ): Promise<{ result: string; metrics: Metrics }> {
   if (!generator || !modelLoaded) throw new Error('Model not initialized.')
-
-  const { maxTokens = 100, temperature = 0.2, stream = false } = params ?? {}
+  
   const startTime = performance.now()
   let tokenCount = 0
 
+  if (typeof input === 'string') {
+    const tokens = generator.tokenizer.encode(input)
+    log('Inference starting (string)', { promptLen: input.length, promptTokens: tokens.length, params })
+  } else {
+    log('Inference starting (messages)', { count: input.length, params })
+  }
+
+  const { maxTokens = 100, temperature = 0.2, stream = false } = params ?? {}
+
   if (stream) {
-    // transformers.js streamer — emit token-by-token
     const { TextStreamer } = await import('@huggingface/transformers')
     let fullText = ''
 
@@ -188,36 +211,50 @@ async function infer(
       callback_function: (token: string) => {
         fullText += token
         tokenCount++
+        if (DEBUG && tokenCount < 5) log('Emitting token', { token, count: tokenCount })
         self.postMessage({ type: 'token', requestId, token })
       }
     })
 
-    await generator(prompt, {
+    const output = await generator(input as any, {
       max_new_tokens: maxTokens,
       temperature,
-      do_sample: true,
+      do_sample: false,
       streamer
     })
 
+    log('Raw generator output (stream)', { output, result: fullText })
+
     const durationMs = performance.now() - startTime
     const tokPerSec = tokenCount / (durationMs / 1000)
+    log('Inference (stream) complete', { totalLen: fullText.length, tokens: tokenCount, durationMs })
     return { result: fullText.trim(), metrics: { durationMs, tokenCount, tokPerSec } }
   }
 
-  const output = await generator(prompt, {
+  const output = await generator(input as any, {
     max_new_tokens: maxTokens,
     temperature,
-    do_sample: true,
+    do_sample: false,
   })
+  
+  log('Raw generator output (non-stream)', { output })
   const durationMs = performance.now() - startTime
 
   const generated = (output as any)[0]?.generated_text
-  const result = (typeof generated === 'string' ? generated : '').replace(prompt, '').trim()
+  let result = ''
   
-  const tokens = generator.tokenizer.encode(result)
-  tokenCount = tokens.length
+  if (Array.isArray(generated)) {
+    result = (generated[generated.length - 1]?.content || '').trim()
+  } else if (typeof generated === 'string') {
+    const promptStr = typeof input === 'string' ? input : ''
+    result = (generated.startsWith(promptStr) ? generated.slice(promptStr.length) : generated).trim()
+  }
+
+  const resultTokens = generator.tokenizer.encode(result)
+  tokenCount = resultTokens.length
   const tokPerSec = tokenCount / (durationMs / 1000)
 
+  log('Inference (non-stream) complete', { resultLen: result.length, tokens: tokenCount })
   return { result, metrics: { durationMs, tokenCount, tokPerSec } }
 }
 
@@ -226,12 +263,12 @@ async function infer(
 // ---------------------------------------------------------------------------
 
 self.onmessage = async (event: MessageEvent<MessageData>) => {
-  const { type, text, prompt, sectionId, modelId, preferredBackend, params } = event.data
+  const { type, text, prompt, messages, sectionId, modelId, preferredBackend, dtype, params } = event.data
 
   try {
     switch (type) {
       case 'init':
-        await initializeModel(modelId, preferredBackend)
+        await initializeModel(modelId, preferredBackend, dtype)
         self.postMessage({ type: 'init-complete', backend: activeBackend })
         break
 
@@ -243,8 +280,9 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
         break
 
       case 'infer':
-        if (!prompt) throw new Error('No prompt provided for inference')
-        const { result, metrics: iMetrics } = await infer(prompt, params, sectionId)
+        const input = messages || prompt
+        if (!input) throw new Error('No prompt or messages provided for inference')
+        const { result, metrics: iMetrics } = await infer(input, params, sectionId)
         self.postMessage({ type: 'infer-complete', requestId: sectionId, result, metrics: iMetrics })
         break
 
