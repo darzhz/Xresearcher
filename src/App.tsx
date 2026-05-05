@@ -92,6 +92,16 @@ function App() {
     await handleOpenPaper(arxivId)
   }
 
+  const handleRemoveFromLibrary = async (id: string) => {
+    if (confirm('Are you sure you wish to remove this record from the permanent archive?')) {
+      try {
+        await library.removePaper(id)
+      } catch (err) {
+        console.error('Failed to remove paper:', err)
+      }
+    }
+  }
+
   const handleExitReader = () => {
     setReaderPaper(null)
     setReaderMetadata(null)
@@ -141,6 +151,8 @@ function App() {
         isReaderMode={activeView === 'reader'}
         onExitReader={handleExitReader}
         summarizeProgress={library.summarizeProgress}
+        isPaperSaved={readerPaper ? library.isPaperSaved(readerPaper.id) : false}
+        onSavePaper={readerMetadata ? async () => { await library.savePaper(readerMetadata!) } : undefined}
       />
 
       <main className="w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -191,7 +203,10 @@ function App() {
                     paper={readerPaper} 
                     metadata={readerMetadata}
                     isSaved={library.isPaperSaved(readerPaper.id)}
-                    onSave={() => readerMetadata && library.savePaper(readerMetadata)}
+                    onSave={async () => {
+                      if (readerMetadata) await library.savePaper(readerMetadata)
+                    }}
+                    onRemove={() => handleRemoveFromLibrary(readerPaper.id)}
                     initialized={initialized}
                     llmError={llmError}
                     summarize={summarize}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader, Search } from 'lucide-react'
+import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader, Search, Bookmark, BookmarkCheck } from 'lucide-react'
 import type { AppView } from '../types'
 
 interface NavBarProps {
@@ -8,6 +8,8 @@ interface NavBarProps {
   isReaderMode: boolean
   onExitReader?: () => void
   summarizeProgress?: { pct: number; stage: string } | null
+  isPaperSaved?: boolean
+  onSavePaper?: () => Promise<void>
 }
 
 export function NavBar({
@@ -15,9 +17,12 @@ export function NavBar({
   onTabChange,
   isReaderMode,
   onExitReader,
-  summarizeProgress
+  summarizeProgress,
+  isPaperSaved,
+  onSavePaper
 }: NavBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -26,6 +31,16 @@ export function NavBar({
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleSave = async () => {
+    if (!onSavePaper || isPaperSaved || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSavePaper();
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const today = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -62,15 +77,15 @@ export function NavBar({
         <div className="max-w-7xl mx-auto">
           <div className={`flex flex-col items-center transition-all duration-300 ${isScrolled ? 'gap-2' : 'gap-4'}`}>
             <div className="flex items-center justify-between w-full">
-              {/* Left Spacer for centering */}
-              <div className={`w-24 ${isReaderMode ? 'hidden' : 'block'} sm:block transition-all duration-300 ${isScrolled ? 'scale-75' : 'scale-100'}`}>
+              {/* Left Side: Back Button (Reader) or Masthead Spacer */}
+              <div className={`w-32 transition-all duration-300 ${isScrolled ? 'scale-75' : 'scale-100'}`}>
                 {isReaderMode && (
                   <button
                     onClick={onExitReader}
-                    className="flex items-center gap-2 text-ink hover:text-editorial transition-colors font-mono uppercase text-xs tracking-tighter"
+                    className="flex items-center gap-2 text-ink hover:text-editorial transition-colors font-mono uppercase text-xs font-black tracking-tighter"
                   >
-                    <ArrowLeft size={14} />
-                    <span>Back</span>
+                    <ArrowLeft size={16} />
+                    <span>Back to Index</span>
                   </button>
                 )}
               </div>
@@ -90,14 +105,26 @@ export function NavBar({
                 </p>
               </div>
 
-              {/* Right Menu Button (Mobile) */}
-              <div className={`w-24 flex justify-end transition-all duration-300 ${isScrolled ? 'scale-75' : 'scale-100'}`}>
-                {isReaderMode && (
+              {/* Right Side: Archive Button (Reader) or Settings Spacer */}
+              <div className={`w-32 flex justify-end transition-all duration-300 ${isScrolled ? 'scale-75' : 'scale-100'}`}>
+                {isReaderMode && onSavePaper && (
                   <button
-                    onClick={onExitReader}
-                    className="sm:hidden text-ink hover:text-editorial transition-colors"
+                    onClick={handleSave}
+                    disabled={isPaperSaved || isSaving}
+                    className={`flex items-center gap-2 px-3 py-1.5 border-2 border-ink font-mono text-[10px] uppercase font-black tracking-widest transition-all ${
+                      isPaperSaved 
+                        ? 'bg-ink text-paper opacity-100' 
+                        : 'bg-paper text-ink hover:bg-editorial hover:text-paper hover:border-editorial'
+                    } ${isSaving ? 'opacity-70 animate-pulse' : ''}`}
                   >
-                    <ArrowLeft size={24} />
+                    {isSaving ? (
+                      <Loader size={12} className="animate-spin" />
+                    ) : isPaperSaved ? (
+                      <BookmarkCheck size={12} />
+                    ) : (
+                      <Bookmark size={12} />
+                    )}
+                    <span className="hidden sm:inline">{isSaving ? 'Saving' : isPaperSaved ? 'Archived' : 'Archive'}</span>
                   </button>
                 )}
               </div>
