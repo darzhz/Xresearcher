@@ -76,7 +76,7 @@ export interface PageIndex {
   }[];
 }
 
-export type AppView = 'inbox' | 'library' | 'reader'
+export type AppView = 'inbox' | 'library' | 'reader' | 'search'
 
 export interface ArxivSearchParams {
   query?: string

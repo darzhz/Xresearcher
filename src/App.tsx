@@ -11,15 +11,16 @@ import { ModelDownloadModal } from './components/ModelDownloadModal'
 import { useOPFS } from './hooks/useOPFS'
 import { useLLM } from './hooks/useLLM'
 import { useLibrary } from './hooks/useLibrary'
-import type { PaperData, AppView } from './types'
+import type { PaperData, AppView, ArxivMetadata } from './types'
 import type { ModelConfig } from './lib/models'
-import { fetchAr5ivPaper } from './lib/arxiv'
+import { fetchAr5ivPaper, searchArxiv } from './lib/arxiv'
 import { loadPaperFromOPFS, initializePaperStorage } from './lib/paperStorage'
 import { loadModelConfig, deleteModel } from './lib/models'
 
 function App() {
   const [activeView, setActiveView] = useState<AppView>('inbox')
   const [readerPaper, setReaderPaper] = useState<PaperData | null>(null)
+  const [readerMetadata, setReaderMetadata] = useState<ArxivMetadata | null>(null)
   const [readerLoading, setReaderLoading] = useState(false)
   const [readerError, setReaderError] = useState<string | null>(null)
   const [showModelModal, setShowModelModal] = useState(false)
@@ -56,10 +57,17 @@ function App() {
    * Open a paper in reader mode.
    * Tries OPFS first (offline), falls back to network.
    */
-  const handleOpenPaper = async (arxivId: string) => {
+  const handleOpenPaper = async (arxivId: string, metadata?: ArxivMetadata) => {
     setReaderLoading(true)
     setReaderError(null)
     try {
+      // If metadata not provided, fetch it
+      if (!metadata) {
+        const metadataList = await searchArxiv({ query: arxivId })
+        metadata = metadataList.find(m => m.id === arxivId) || undefined
+      }
+      setReaderMetadata(metadata || null)
+
       // Try to load from OPFS first (offline)
       let paperData = await loadPaperFromOPFS(arxivId)
 
@@ -86,6 +94,7 @@ function App() {
 
   const handleExitReader = () => {
     setReaderPaper(null)
+    setReaderMetadata(null)
     setActiveView('inbox')
   }
 
@@ -142,6 +151,22 @@ function App() {
             </div>
           )}
 
+          {activeView === 'search' && (
+            <div className="max-w-4xl mx-auto">
+              <div className="border-4 border-ink p-6 sm:p-10 bg-paper hard-shadow-hover transition-all">
+                <div className="mb-6 flex items-center gap-4">
+                  <div className="h-8 w-2 bg-editorial" />
+                  <h2 className="font-mono uppercase tracking-[0.2em] text-sm font-bold">Document Archive Query</h2>
+                </div>
+                <PaperInput
+                  onSubmit={handlePaperInputSubmit}
+                  loading={readerLoading}
+                  error={readerError}
+                />
+              </div>
+            </div>
+          )}
+
           {activeView === 'library' && (
             <div className="newsprint-grid bg-paper">
               <LibraryView onOpenPaper={handleOpenPaper} library={library} />
@@ -164,6 +189,9 @@ function App() {
                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/40 mb-6">Editorial Summary — Ref. {readerPaper.arxivId}</p>
                   <SummaryView 
                     paper={readerPaper} 
+                    metadata={readerMetadata}
+                    isSaved={library.isPaperSaved(readerPaper.id)}
+                    onSave={() => readerMetadata && library.savePaper(readerMetadata)}
                     initialized={initialized}
                     llmError={llmError}
                     summarize={summarize}
@@ -179,18 +207,6 @@ function App() {
                   </div>
                   </div>
 
-              </div>
-              {/* Paper search bar in reader */}
-              <div className="border-4 border-ink p-6 sm:p-10 bg-paper hard-shadow-hover transition-all">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="h-8 w-2 bg-editorial" />
-                  <h2 className="font-mono uppercase tracking-[0.2em] text-sm font-bold">Document Archive Query</h2>
-                </div>
-                <PaperInput
-                  onSubmit={handlePaperInputSubmit}
-                  loading={readerLoading}
-                  error={readerError}
-                />
               </div>
             </div>
           ) : activeView === 'reader' && readerLoading ? (

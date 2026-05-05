@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader } from 'lucide-react'
+import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader, Search } from 'lucide-react'
 import type { AppView } from '../types'
 
 interface NavBarProps {
@@ -113,6 +113,15 @@ export function NavBar({
                 >
                   <Inbox size={isScrolled ? 12 : 16} strokeWidth={2} />
                   <span>Inbox</span>
+                </button>
+                <button
+                  onClick={() => onTabChange('search')}
+                  className={`flex items-center gap-2 font-mono uppercase transition-colors hover:text-editorial ${
+                    activeTab === 'search' ? 'text-editorial font-bold' : 'text-ink'
+                  } ${isScrolled ? 'text-[10px]' : 'text-sm tracking-widest'}`}
+                >
+                  <Search size={isScrolled ? 12 : 16} strokeWidth={2} />
+                  <span>Search</span>
                 </button>
                 <button
                   onClick={() => onTabChange('library')}
