@@ -245,28 +245,50 @@ export async function generatePodcastScript(
   
   onProgress?.(20, 'Generating script…')
 
-  const prompt = [
-    { role: 'system', content: 'You are an expert science communicator and podcast host.' },
-    { role: 'user', content: `Convert this research paper into a warm, engaging, and professional 30-second podcast script for a single narrator. 
-    
-    Structure:
-    1. Welcome listeners to "ArXiv Local-Voice".
-    2. Introduce the paper: "${paper.title}" by ${paper.authors.slice(0, 1).join(', ')}${paper.authors.length > 1 ? ' et al.' : ''}.
-    3. Explain the core problem and why it matters.
-    4. Share the key finding.
-    5. Sign off with: "Thanks for listening to this local AI-generated summary."
-    
-    Tone: Conversational, clear, and informative. Keep it under 100 words.
-    
-    Paper Content Highlights:
-    ${dense}` }
-  ]
+const prompt = [
+  {
+    role: 'system',
+    content: `You are a compelling science storyteller and podcast host who specializes in making complex research feel intuitive, exciting, and easy to follow. You prioritize curiosity, clarity, and narrative flow over dry summarization.`
+  },
+  {
+    role: 'user',
+    content: `Turn the following research paper into a 1-minute podcast script for a single narrator.
 
-  const { result, metrics } = await inferStream(
-    prompt,
-    token => onToken?.(token),
-    { maxTokens: 200, temperature: 0.7 }
-  )
+GOAL:
+Make the listener feel curious within the first 5 seconds, understand the core idea without technical background, and walk away feeling like they learned something meaningful.
+
+STRUCTURE:
+1. Start with a strong hook (question, analogy, or surprising fact).
+2. Welcome listeners to "ArXiv Local-Voice".
+3. Introduce the paper naturally: "${paper.title}" by ${paper.authors.slice(0, 2).join(', ')}${paper.authors.length > 2 ? ' et al.' : ''}.
+4. Explain the core problem in simple, relatable terms (avoid jargon).
+5. Describe the key idea or breakthrough intuitively (use analogies if helpful).
+6. Highlight the most impressive result or takeaway.
+7. End with a forward-looking or thought-provoking insight.
+8. Close with: "Thanks for listening to this local AI-generated summary."
+
+STYLE GUIDELINES:
+- Conversational and warm, like explaining to a smart friend.
+- Avoid technical overload—simplify without dumbing down.
+- Use short, punchy sentences where possible.
+- Prefer storytelling over listing facts.
+- No bullet points, no headings—pure spoken script.
+
+CONSTRAINTS:
+- Under 200 words
+- Single narrator voice
+- Natural pacing for audio
+
+PAPER CONTENT:
+${dense}`
+  }
+]
+
+const { result, metrics } = await inferStream(
+  prompt,
+  token => onToken?.(token),
+  { maxTokens: 400, temperature: 0.8 }
+)
 
   onProgress?.(100, 'Done')
   return { script: result.trim(), metrics }

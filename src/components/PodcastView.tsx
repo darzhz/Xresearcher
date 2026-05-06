@@ -52,7 +52,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   const [curSegIdx, setCurSegIdx] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [voice, setVoice] = useState('af_heart')
-  const [speed, setSpeed] = useState(1.0)
+  const [activeTab, setActiveTab] = useState<'visualizer' | 'script'>('visualizer')
   
   const [totalDuration, setTotalDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -63,7 +63,6 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   const audioCtxRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const srcNodeRef = useRef<AudioBufferSourceNode | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const segmentsRef = useRef<Segment[]>([])
   const curSegIdxRef = useRef(-1)
@@ -205,7 +204,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
       type: 'generate',
       text: nextSegments[idx].text,
       voice,
-      speed
+      speed: 1.0 // Fixed speed
     })
   }
 
@@ -300,62 +299,13 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   }
 
   const animate = () => {
-    if (!canvasRef.current || !analyserRef.current) return
     rafRef.current = requestAnimationFrame(animate)
-
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const W = canvas.width
-    const H = canvas.height
-    ctx.clearRect(0, 0, W, H)
 
     // Update progress
     const ct = playingRef.current 
       ? elapsedBeforeCurRef.current + (audioCtxRef.current!.currentTime - segStartedAtRef.current)
       : elapsedBeforeCurRef.current + segOffsetRef.current
     setCurrentTime(Math.min(ct, totalDuration))
-
-    // Visualizer
-    const td = new Uint8Array(analyserRef.current.frequencyBinCount)
-    analyserRef.current.getByteTimeDomainData(td)
-    
-    ctx.beginPath()
-    ctx.strokeStyle = '#000000'
-    ctx.lineWidth = 2
-    
-    const sliceWidth = W / td.length
-    let x = 0
-    
-    for (let i = 0; i < td.length; i++) {
-      const v = td[i] / 128.0
-      const y = v * H / 2
-      
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-      
-      x += sliceWidth
-    }
-    
-    ctx.lineTo(W, H / 2)
-    ctx.stroke()
-
-    // Frequency bars
-    const fd = new Uint8Array(analyserRef.current.frequencyBinCount)
-    analyserRef.current.getByteFrequencyData(fd)
-    
-    const barWidth = (W / fd.length) * 2.5
-    let barX = 0
-    
-    ctx.globalAlpha = 0.1
-    for (let i = 0; i < fd.length; i++) {
-      const barHeight = (fd[i] / 255) * H
-      ctx.fillStyle = '#000000'
-      ctx.fillRect(barX, H - barHeight, barWidth, barHeight)
-      barX += barWidth + 1
-    }
-    ctx.globalAlpha = 1.0
   }
 
   const formatTime = (s: number) => {
@@ -396,73 +346,98 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3 relative z-10">
-        <section className="lg:col-span-2 border-r-4 border-ink flex flex-col overflow-hidden">
-          <div className="p-4 border-b-2 border-ink bg-ink/5 flex justify-between items-center">
-            <span className="font-mono text-[10px] uppercase font-black tracking-widest">Script Teleprompter</span>
-            <span className="font-mono text-[10px] text-ink/40">{segments.length} Segments</span>
+      <main className="flex-1 overflow-hidden flex flex-col lg:flex-row relative z-10">
+        <section className="flex-1 border-r-4 border-ink flex flex-col overflow-hidden">
+          <div className="flex border-b-2 border-ink bg-paper">
+            <button 
+              onClick={() => setActiveTab('visualizer')}
+              className={`px-6 py-3 font-mono text-[10px] uppercase font-black tracking-widest border-r-2 border-ink transition-colors ${activeTab === 'visualizer' ? 'bg-ink text-paper' : 'bg-paper text-ink hover:bg-ink/5'}`}
+            >
+              Visualizer
+            </button>
+            <button 
+              onClick={() => setActiveTab('script')}
+              className={`px-6 py-3 font-mono text-[10px] uppercase font-black tracking-widest transition-colors ${activeTab === 'script' ? 'bg-ink text-paper' : 'bg-paper text-ink hover:bg-ink/5'}`}
+            >
+              Teleprompter
+            </button>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-8 sm:p-12 space-y-8 custom-scrollbar">
-            {segments.map((seg, i) => (
-              <div 
-                key={i}
-                className={`transition-all duration-500 p-4 border-l-4 ${
-                  curSegIdx === i 
-                    ? 'border-editorial bg-editorial/5 opacity-100 scale-[1.02]' 
-                    : seg.status === 'done' 
-                      ? 'border-ink/20 opacity-40' 
-                      : 'border-transparent opacity-80'
-                }`}
-              >
-                <p className={`font-display text-2xl leading-relaxed italic ${curSegIdx === i ? 'text-ink font-bold' : 'text-ink/60'}`}>
-                  {seg.text}
-                </p>
-                {seg.status === 'loading' && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <Loader2 size={12} className="animate-spin text-editorial" />
-                    <span className="font-mono text-[8px] uppercase font-bold text-editorial tracking-widest">Synthesizing...</span>
+          <div className="flex-1 relative overflow-hidden">
+            {activeTab === 'visualizer' ? (
+              <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-editorial/5">
+                <div className="w-full max-w-lg aspect-square border-4 border-ink bg-paper relative shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center overflow-hidden">
+                   {isPlaying ? (
+                      <div className="flex items-end justify-center gap-1.5 h-32">
+                         {[...Array(12)].map((_, i) => (
+                            <div 
+                              key={i} 
+                              className="w-3 bg-ink animate-waveform" 
+                              style={{ 
+                                 animationDelay: `${i * 0.1}s`,
+                                 height: '20%' 
+                              }} 
+                            />
+                         ))}
+                      </div>
+                   ) : (
+                      <div className="text-center space-y-4">
+                        <Mic2 size={64} className="mx-auto text-ink/10" />
+                        <p className="font-mono text-[10px] uppercase font-black tracking-widest text-ink/20">Studio Idle</p>
+                      </div>
+                   )}
+
+                   <div className="absolute bottom-4 left-4 right-4 bg-paper border-2 border-ink p-3 flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${isPlaying || isAudioGenerating ? 'bg-editorial animate-pulse' : 'bg-ink/20'}`} />
+                      <div className="flex-1 overflow-hidden text-left">
+                         <p className="font-mono text-[9px] uppercase font-black tracking-widest truncate">
+                           {isAudioGenerating ? 'Synthesizing Audio' : isPlaying ? 'Live Playback' : isGenerating ? 'Scripting' : 'System Ready'}
+                         </p>
+                         <p className="font-display text-[10px] truncate italic">
+                           {paper.title}
+                         </p>
+                      </div>
+                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full overflow-y-auto p-8 sm:p-12 space-y-8 custom-scrollbar bg-paper">
+                {segments.map((seg, i) => (
+                  <div 
+                    key={i}
+                    className={`transition-all duration-500 p-4 border-l-4 ${
+                      curSegIdx === i 
+                        ? 'border-editorial bg-editorial/5 opacity-100 scale-[1.02]' 
+                        : seg.status === 'done' 
+                          ? 'border-ink/20 opacity-40' 
+                          : 'border-transparent opacity-80'
+                    }`}
+                  >
+                    <p className={`font-display text-2xl leading-relaxed italic ${curSegIdx === i ? 'text-ink font-bold' : 'text-ink/60'}`}>
+                      {seg.text}
+                    </p>
+                    {seg.status === 'loading' && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Loader2 size={12} className="animate-spin text-editorial" />
+                        <span className="font-mono text-[8px] uppercase font-bold text-editorial tracking-widest">Synthesizing...</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {isGenerating && (
+                  <div className="p-4 border-l-4 border-dashed border-ink/20 animate-pulse">
+                    <p className="font-display text-2xl leading-relaxed italic text-ink/20">
+                      Writing script...
+                    </p>
                   </div>
                 )}
-              </div>
-            ))}
-            {isGenerating && (
-              <div className="p-4 border-l-4 border-dashed border-ink/20 animate-pulse">
-                <p className="font-display text-2xl leading-relaxed italic text-ink/20">
-                  Writing script...
-                </p>
               </div>
             )}
           </div>
         </section>
 
-        <section className="bg-editorial/5 flex flex-col overflow-y-auto">
+        <section className="lg:w-96 bg-paper border-t-4 lg:border-t-0 lg:border-l-4 border-ink flex flex-col overflow-y-auto">
           <div className="p-8 space-y-8">
-            <div className="border-4 border-ink bg-paper aspect-square relative shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-              <canvas ref={canvasRef} className="w-full h-full" width={400} height={400} />
-              
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {!isPlaying && !isAudioGenerating && (
-                  <div className="text-center space-y-4">
-                    <Mic2 size={48} className="mx-auto text-ink/10" />
-                    <p className="font-mono text-[10px] uppercase font-black tracking-widest text-ink/20">Studio Idle</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="absolute bottom-4 left-4 right-4 bg-paper border-2 border-ink p-3 flex items-center gap-3">
-                 <div className={`w-2 h-2 rounded-full ${isPlaying || isAudioGenerating ? 'bg-editorial animate-pulse' : 'bg-ink/20'}`} />
-                 <div className="flex-1 overflow-hidden">
-                    <p className="font-mono text-[9px] uppercase font-black tracking-widest truncate">
-                      {isAudioGenerating ? 'Synthesizing Audio' : isPlaying ? 'Live Playback' : isGenerating ? 'Scripting' : 'System Ready'}
-                    </p>
-                    <p className="font-display text-[10px] truncate italic">
-                      {paper.title}
-                    </p>
-                 </div>
-              </div>
-            </div>
-
             <div className="space-y-6">
               {!isAudioReady && !isAudioGenerating && (
                 <button 
@@ -587,29 +562,6 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
                     <option key={v.id} value={v.id}>{v.name}</option>
                   ))}
                 </select>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                   <div className="flex items-center gap-2">
-                     <Zap size={16} />
-                     <label className="font-mono text-[10px] uppercase font-black tracking-widest">Playback Speed</label>
-                   </div>
-                   <span className="font-mono text-xs font-bold bg-ink text-paper px-2 py-0.5">{speed.toFixed(1)}x</span>
-                </div>
-                <input 
-                  type="range" 
-                  min="0.5" 
-                  max="2.0" 
-                  step="0.1" 
-                  value={speed}
-                  onChange={(e) => {
-                    setSpeed(parseFloat(e.target.value))
-                    setIsAudioReady(false) // Require re-synthesis if speed changes (Kokoro bakes speed into audio)
-                  }}
-                  disabled={isAudioGenerating}
-                  className="w-full accent-editorial disabled:opacity-50"
-                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
