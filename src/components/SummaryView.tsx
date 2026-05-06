@@ -51,8 +51,11 @@ export function SummaryView({
     if (!createPodcastScript || !initialized) return
 
     setIsGeneratingPodcast(true)
+    const startTime = performance.now()
     try {
       const { script } = await createPodcastScript(paper)
+      const duration = (performance.now() - startTime).toFixed(2)
+      console.log(`[Podcast Script Generated in ${duration}ms]:`, script)
       setPodcastScript(script)
       setShowPodcast(true)
     } catch (err) {

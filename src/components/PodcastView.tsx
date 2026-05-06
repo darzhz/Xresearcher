@@ -141,6 +141,7 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
     }
 
     let totalDur = 0
+    const startTime = performance.now()
     
     // Synthesize segments
     for (let i = 0; i < newSegments.length; i++) {
@@ -165,6 +166,9 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
         updateSegmentStatus(i, 'error')
       }
     }
+
+    const duration = (performance.now() - startTime).toFixed(2)
+    console.log(`[Audio Synthesis Complete]: ${newSegments.length} segments in ${duration}ms (Total Audio: ${totalDur.toFixed(2)}s)`)
   }
 
   const updateSegmentStatus = (idx: number, status: Segment['status']) => {
