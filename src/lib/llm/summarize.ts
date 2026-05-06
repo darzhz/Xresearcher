@@ -241,7 +241,7 @@ export async function generatePodcastScript(
     .map(s => s.full_text || s.content)
     .join('\n\n')
 
-  const dense = extractDenseText(boostedText, 2500) // ~10k chars budget
+  const dense = extractDenseText(boostedText, 1000) // ~4k chars budget for faster prefill
   
   onProgress?.(20, 'Generating script…')
 
@@ -258,7 +258,7 @@ export async function generatePodcastScript(
     6. Conclude with a thought on the impact of this work.
     7. Sign off with: "Thanks for listening to this local AI-generated summary."
     
-    Tone: Conversational, clear, and informative. Avoid heavy jargon where possible.
+    Tone: Conversational, clear, and informative. Keep it under 200 words.
     
     Paper Content Highlights:
     ${dense}` }
@@ -267,7 +267,7 @@ export async function generatePodcastScript(
   const { result, metrics } = await inferStream(
     prompt,
     token => onToken?.(token),
-    { maxTokens: 800, temperature: 0.7 }
+    { maxTokens: 400, temperature: 0.7 }
   )
 
   onProgress?.(100, 'Done')

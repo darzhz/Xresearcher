@@ -20,6 +20,7 @@ interface PodcastViewProps {
   paper: PaperData
   script: string
   onClose: () => void
+  isGenerating?: boolean
 }
 
 interface Segment {
@@ -39,7 +40,7 @@ const VOICES = [
   { id: 'bm_george', name: 'bm_george — British ♂' },
 ]
 
-export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
+export function PodcastView({ paper, script, onClose, isGenerating }: PodcastViewProps) {
   // TTS & Audio State
   const [tts, setTts] = useState<any>(null)
   const [loadingModel, setLoadingModel] = useState(true)
@@ -67,6 +68,10 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
   const segStartedAtRef = useRef(0)
   const segOffsetRef = useRef(0)
   const elapsedBeforeCurRef = useRef(0)
+  
+  // Incremental processing state
+  const lastProcessedLenRef = useRef(0)
+  const synthesizingRef = useRef(false)
 
   // Initialize
   useEffect(() => {
@@ -107,31 +112,66 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
     }
   }, [])
 
-  // Generate speech segments when script and tts are ready
+  // Process script changes
   useEffect(() => {
-    if (tts && script) {
-      generateSpeech()
+    if (!tts || !script) return
+
+    // If script is reset (e.g. starting a new generation), reset segments
+    if (script.length < lastProcessedLenRef.current) {
+      stopAll()
+      setSegments([])
+      segmentsRef.current = []
+      lastProcessedLenRef.current = 0
     }
+
+    processNewScriptContent()
   }, [tts, script, voice, speed])
 
-  const generateSpeech = async () => {
-    stopAll()
+  const processNewScriptContent = async () => {
+    if (synthesizingRef.current) return
     
-    const parts = script.match(/[^.!?\n]+[.!?\n]*/g) || [script]
-    const newSegments: Segment[] = parts.map(p => ({
-      text: p.trim(),
-      buf: null,
-      status: 'pending' as const
-    })).filter(s => s.text.length > 2)
+    // Find new complete sentences
+    const content = script
+    const sentences = content.match(/[^.!?\n]+[.!?\n]*/g) || []
     
-    setSegments(newSegments)
-    segmentsRef.current = newSegments
-    setCurSegIdx(-1)
-    curSegIdxRef.current = -1
-    setTotalDuration(0)
-    setCurrentTime(0)
-    elapsedBeforeCurRef.current = 0
-    segOffsetRef.current = 0
+    // We only process sentences that are likely complete (have punctuation)
+    // unless we are no longer generating.
+    const completedSentences = isGenerating 
+      ? sentences.filter(s => /[.!?\n]$/.test(s)) 
+      : sentences
+
+    const newSegmentsToAdd: Segment[] = []
+    
+    // Starting from the last processed index, add new segments
+    let currentProcessedCount = segmentsRef.current.length
+    if (completedSentences.length > currentProcessedCount) {
+      for (let i = currentProcessedCount; i < completedSentences.length; i++) {
+        const text = completedSentences[i].trim()
+        if (text.length > 2) {
+          newSegmentsToAdd.push({
+            text,
+            buf: null,
+            status: 'pending'
+          })
+        }
+      }
+    }
+
+    if (newSegmentsToAdd.length === 0) return
+
+    // Update state with pending segments
+    const updatedSegments = [...segmentsRef.current, ...newSegmentsToAdd]
+    setSegments(updatedSegments)
+    segmentsRef.current = updatedSegments
+    lastProcessedLenRef.current = content.length
+
+    // Start synthesis loop if not already running
+    synthesizePendingSegments()
+  }
+
+  const synthesizePendingSegments = async () => {
+    if (synthesizingRef.current || !tts) return
+    synthesizingRef.current = true
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -140,35 +180,41 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
       analyserRef.current.connect(audioCtxRef.current.destination)
     }
 
-    let totalDur = 0
-    const startTime = performance.now()
-    
-    // Synthesize segments
-    for (let i = 0; i < newSegments.length; i++) {
-      updateSegmentStatus(i, 'loading')
+    while (true) {
+      const idx = segmentsRef.current.findIndex(s => s.status === 'pending')
+      if (idx === -1) break
+
+      updateSegmentStatus(idx, 'loading')
       try {
-        const out = await tts.generate(newSegments[i].text, { voice, speed })
+        const out = await tts.generate(segmentsRef.current[idx].text, { voice, speed })
         const f32 = out.audio instanceof Float32Array ? out.audio : new Float32Array(out.audio)
         const sr = out.sampling_rate || 24000
         
         const buf = audioCtxRef.current.createBuffer(1, f32.length, sr)
         buf.copyToChannel(f32, 0)
         
-        newSegments[i].buf = buf
-        newSegments[i].status = 'ready'
-        totalDur += buf.duration
+        const nextSegments = [...segmentsRef.current]
+        nextSegments[idx].buf = buf
+        nextSegments[idx].status = 'ready'
         
-        setSegments([...newSegments])
-        segmentsRef.current = [...newSegments]
-        setTotalDuration(totalDur)
+        setSegments(nextSegments)
+        segmentsRef.current = nextSegments
+        
+        // Recalculate total duration
+        const newTotalDur = nextSegments.reduce((acc, s) => acc + (s.buf?.duration || 0), 0)
+        setTotalDuration(newTotalDur)
+
+        // Auto-play first segment if nothing is playing
+        if (curSegIdxRef.current === -1 && !playingRef.current && idx === 0) {
+           playSegment(0)
+        }
       } catch (err) {
-        console.error(`Failed to generate segment ${i}`, err)
-        updateSegmentStatus(i, 'error')
+        console.error(`Failed to generate segment ${idx}`, err)
+        updateSegmentStatus(idx, 'error')
       }
     }
 
-    const duration = (performance.now() - startTime).toFixed(2)
-    console.log(`[Audio Synthesis Complete]: ${newSegments.length} segments in ${duration}ms (Total Audio: ${totalDur.toFixed(2)}s)`)
+    synthesizingRef.current = false
   }
 
   const updateSegmentStatus = (idx: number, status: Segment['status']) => {
@@ -181,17 +227,20 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
   }
 
   const playSegment = (idx: number, offset = 0) => {
-    if (idx < 0 || idx >= segmentsRef.current.length) {
-      onPlaybackEnded()
+    if (idx < 0) return
+    if (idx >= segmentsRef.current.length) {
+      if (!isGenerating) onPlaybackEnded()
       return
     }
 
     const seg = segmentsRef.current[idx]
     if (!seg?.buf) {
-      // Skip if not ready
-      setCurSegIdx(idx + 1)
-      curSegIdxRef.current = idx + 1
-      playSegment(idx + 1)
+      // If still generating, we wait for this segment.
+      // For now, let's just stay on this index and wait.
+      setCurSegIdx(idx)
+      curSegIdxRef.current = idx
+      setIsPlaying(false)
+      playingRef.current = false
       return
     }
 
@@ -210,9 +259,11 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
       if (!playingRef.current) return
       updateSegmentStatus(idx, 'done')
       elapsedBeforeCurRef.current += seg.buf!.duration
-      setCurSegIdx(idx + 1)
-      curSegIdxRef.current = idx + 1
-      playSegment(idx + 1)
+      
+      const nextIdx = idx + 1
+      setCurSegIdx(nextIdx)
+      curSegIdxRef.current = nextIdx
+      playSegment(nextIdx)
     }
 
     src.start(0, offset)
@@ -399,8 +450,21 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
                 <p className={`font-display text-2xl leading-relaxed italic ${curSegIdx === i ? 'text-ink font-bold' : 'text-ink/60'}`}>
                   {seg.text}
                 </p>
+                {seg.status === 'loading' && curSegIdx === i && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Loader2 size={12} className="animate-spin text-editorial" />
+                    <span className="font-mono text-[8px] uppercase font-bold text-editorial tracking-widest">Synthesizing Audio...</span>
+                  </div>
+                )}
               </div>
             ))}
+            {isGenerating && (
+              <div className="p-4 border-l-4 border-dashed border-ink/20 animate-pulse">
+                <p className="font-display text-2xl leading-relaxed italic text-ink/20">
+                  Generating next segments...
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -424,7 +488,7 @@ export function PodcastView({ paper, script, onClose }: PodcastViewProps) {
                  <div className="w-2 h-2 rounded-full bg-editorial animate-pulse" />
                  <div className="flex-1 overflow-hidden">
                     <p className="font-mono text-[9px] uppercase font-black tracking-widest truncate">
-                      {isPlaying ? 'Live Synthesis' : 'Buffer Ready'}
+                      {isPlaying ? 'Live Synthesis' : isGenerating ? 'Script Generation' : 'Buffer Ready'}
                     </p>
                     <p className="font-display text-[10px] truncate italic">
                       {paper.title}

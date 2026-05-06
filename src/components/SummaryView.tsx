@@ -43,7 +43,7 @@ export function SummaryView({
   }
 
   const handleGeneratePodcast = async () => {
-    if (podcastScript) {
+    if (podcastScript && !isGeneratingPodcast) {
       setShowPodcast(true)
       return
     }
@@ -51,15 +51,20 @@ export function SummaryView({
     if (!createPodcastScript || !initialized) return
 
     setIsGeneratingPodcast(true)
+    setShowPodcast(true)
+    setPodcastScript('') // Start with empty string to trigger live display if we want
     const startTime = performance.now()
     try {
-      const { script } = await createPodcastScript(paper)
+      const { script } = await createPodcastScript(paper, (token) => {
+        setPodcastScript(prev => (prev || '') + token)
+      })
       const duration = (performance.now() - startTime).toFixed(2)
       console.log(`[Podcast Script Generated in ${duration}ms]:`, script)
       setPodcastScript(script)
-      setShowPodcast(true)
     } catch (err) {
       console.error('Failed to generate podcast script:', err)
+      setPodcastScript(null)
+      setShowPodcast(false)
     } finally {
       setIsGeneratingPodcast(false)
     }
@@ -67,10 +72,11 @@ export function SummaryView({
 
   return (
     <div className="space-y-12">
-      {showPodcast && podcastScript && (
+      {showPodcast && (podcastScript !== null) && (
         <PodcastView 
           paper={paper} 
           script={podcastScript} 
+          isGenerating={isGeneratingPodcast}
           onClose={() => setShowPodcast(false)} 
         />
       )}

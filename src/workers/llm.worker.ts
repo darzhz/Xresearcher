@@ -5,12 +5,19 @@
 import { pipeline, env, TextGenerationPipeline } from '@huggingface/transformers'
 
 // Transformers.js needs to resolve WASM/model files at a known base URL.
-// Adjust if you have a local asset mirror.
 env.allowLocalModels = false
 env.useBrowserCache = true   // cache downloaded weights in IndexedDB
 
+// Configure ONNX Runtime for maximum performance
+if (env.backends?.onnx?.wasm) {
+  env.backends.onnx.wasm.numThreads = Math.min(navigator.hardwareConcurrency || 4, 8)
+  env.backends.onnx.wasm.simd = true
+}
+
 interface Metrics {
   durationMs: number
+  prefillMs?: number
+  decodeMs?: number
   tokenCount: number
   tokPerSec: number
 }
@@ -64,7 +71,7 @@ async function detectBestDevice(): Promise<'webgpu' | 'wasm'> {
 // ---------------------------------------------------------------------------
 
 async function initializeModel(
-  modelId: string = 'Qwen/Qwen2.5-1.5B-Instruct',
+  modelId: string = 'onnx-community/Qwen2.5-0.5B-Instruct',
   preferredBackend?: 'webgpu' | 'wasm',
   preferredDtype?: QuantDtype
 ): Promise<void> {
@@ -137,49 +144,6 @@ async function initializeModel(
 }
 
 // ---------------------------------------------------------------------------
-// Summarize
-// ---------------------------------------------------------------------------
-
-async function generateSummary(text: string): Promise<{ summary: string; metrics: Metrics }> {
-  if (!generator || !modelLoaded) throw new Error('Model not initialized.')
-  log('Generating summary', { textLen: text.length })
-
-  const maxChars = 4000
-  const truncated = text.length > maxChars ? text.slice(0, maxChars) + '…' : text
-
-  const messages = [
-    { role: 'system', content: 'You are a research assistant. Summarize the following paper in a few sentences.' },
-    { role: 'user',   content: truncated }
-  ]
-
-  const startTime = performance.now()
-  const output = await generator(messages as any, {
-    max_new_tokens: 120,
-    temperature: 0.2,
-    do_sample: false,
-  })
-  const durationMs = performance.now() - startTime
-
-  // transformers.js returns an array; the generated text is in the last message
-  const generated = (output as any)[0]?.generated_text
-  const reply = Array.isArray(generated)
-    ? (generated.length > 0 ? generated[generated.length - 1]?.content : '') ?? ''
-    : String(generated ?? '')
-
-  log('Summary generation result', { replyLen: reply.length })
-
-  // Token count
-  const tokens = generator.tokenizer.encode(reply)
-  const tokenCount = tokens.length
-  const tokPerSec = tokenCount / (durationMs / 1000)
-
-  return { 
-    summary: reply.trim() || 'Unable to generate summary',
-    metrics: { durationMs, tokenCount, tokPerSec }
-  }
-}
-
-// ---------------------------------------------------------------------------
 // General inference
 // ---------------------------------------------------------------------------
 
@@ -191,6 +155,7 @@ async function infer(
   if (!generator || !modelLoaded) throw new Error('Model not initialized.')
   
   const startTime = performance.now()
+  let firstTokenTime = 0
   let tokenCount = 0
 
   if (typeof input === 'string') {
@@ -209,9 +174,13 @@ async function infer(
     const streamer = new TextStreamer(generator.tokenizer, {
       skip_prompt: true,
       callback_function: (token: string) => {
+        if (tokenCount === 0) {
+          firstTokenTime = performance.now()
+          const prefillMs = firstTokenTime - startTime
+          log('First token generated', { prefillMs })
+        }
         fullText += token
         tokenCount++
-        if (DEBUG && tokenCount < 5) log('Emitting token', { token, count: tokenCount })
         self.postMessage({ type: 'token', requestId, token })
       }
     })
@@ -219,27 +188,37 @@ async function infer(
     const output = await generator(input as any, {
       max_new_tokens: maxTokens,
       temperature,
-      do_sample: false,
+      do_sample: temperature > 0,
       streamer
     })
 
-    log('Raw generator output (stream)', { output, result: fullText })
-
     const durationMs = performance.now() - startTime
-    const tokPerSec = tokenCount / (durationMs / 1000)
-    log('Inference (stream) complete', { totalLen: fullText.length, tokens: tokenCount, durationMs })
-    return { result: fullText.trim(), metrics: { durationMs, tokenCount, tokPerSec } }
+    const prefillMs = firstTokenTime - startTime
+    const decodeMs = durationMs - prefillMs
+    const tokPerSec = tokenCount / (decodeMs / 1000)
+    
+    log('Inference (stream) complete', { 
+      totalLen: fullText.length, 
+      tokens: tokenCount, 
+      durationMs,
+      prefillMs,
+      decodeMs,
+      tokPerSec
+    })
+    
+    return { 
+      result: fullText.trim(), 
+      metrics: { durationMs, prefillMs, decodeMs, tokenCount, tokPerSec } 
+    }
   }
 
   const output = await generator(input as any, {
     max_new_tokens: maxTokens,
     temperature,
-    do_sample: false,
+    do_sample: temperature > 0,
   })
   
-  log('Raw generator output (non-stream)', { output })
   const durationMs = performance.now() - startTime
-
   const generated = (output as any)[0]?.generated_text
   let result = ''
   
@@ -275,14 +254,22 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
       case 'summarize':
         if (!text) throw new Error('No text provided for summarization')
         self.postMessage({ type: 'summarize-progress', sectionId, message: 'Generating summary…' })
-        const { summary, metrics: sMetrics } = await generateSummary(text)
-        self.postMessage({ type: 'summary-complete', sectionId, summary, metrics: sMetrics })
+        // Summarize uses infer internally or generateSummary
+        const input = text
+        const { result: summaryResult, metrics: sMetrics } = await infer(
+          [
+            { role: 'system', content: 'You are a research assistant. Summarize the following paper in a few sentences.' },
+            { role: 'user',   content: input.slice(0, 4000) }
+          ],
+          { maxTokens: 150, temperature: 0.2 }
+        )
+        self.postMessage({ type: 'summary-complete', sectionId, summary: summaryResult, metrics: sMetrics })
         break
 
       case 'infer':
-        const input = messages || prompt
-        if (!input) throw new Error('No prompt or messages provided for inference')
-        const { result, metrics: iMetrics } = await infer(input, params, sectionId)
+        const iInput = messages || prompt
+        if (!iInput) throw new Error('No prompt or messages provided for inference')
+        const { result, metrics: iMetrics } = await infer(iInput, params, sectionId)
         self.postMessage({ type: 'infer-complete', requestId: sectionId, result, metrics: iMetrics })
         break
 
