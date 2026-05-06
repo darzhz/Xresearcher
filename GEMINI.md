@@ -7,8 +7,8 @@ A privacy-centric, local-first Progressive Web App (PWA) that transforms arXiv r
 - **Local-First & Privacy-Centric:** All processing (inference, storage, synthesis) happens on the user's device. No telemetry or server-side data extraction.
 - **HTML-First (ar5iv):** Prioritizes the **ar5iv** (HTML) mirror for semantic ingestion over traditional PDF parsing.
 - **On-Device LLM:** Uses **transformers.js (WebGPU/WASM)** with **Qwen 2.5 1.5B (ONNX)** for stable, privacy-preserving summarization.
-- **Persistence (IndexedDB):** Models are cached in **IndexedDB** for high-performance access. Metadata is managed via **Dexie (IndexedDB)**.
-- **Voice Synthesis:** Leverages the **Web Speech API** for zero-latency, zero-dependency audio streaming.
+- **Persistence (OPFS):** Models are cached in **OPFS (Origin Private File System)** via a custom `transformers.js` cache implementation (`src/lib/opfs-cache.ts`) for high-performance, persistent access. Paper metadata and indices are managed via **Dexie (IndexedDB)** and backed up in OPFS.
+- **Voice Synthesis:** Leverages **kokoro-js** and **transformers.js** for high-quality, on-device audio generation, with model caching in OPFS.
 
 ## 🛠 Tech Stack
 | Layer | Technology |

@@ -12,7 +12,11 @@ import {
   Zap,
   Loader2,
   Volume2,
-  Headphones
+  Headphones,
+  List,
+  ChevronDown,
+  Info,
+  Settings2
 } from 'lucide-react'
 import { PaperData } from '../types'
 
@@ -52,7 +56,8 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   const [curSegIdx, setCurSegIdx] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [voice, setVoice] = useState('af_heart')
-  const [activeTab, setActiveTab] = useState<'visualizer' | 'script'>('visualizer')
+  const [showScript, setShowScript] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   
   const [totalDuration, setTotalDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -89,7 +94,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
       const worker = new Worker(new URL('../workers/tts.worker.ts', import.meta.url), { type: 'module' })
       workerRef.current = worker
       
-      worker.onmessage = async (e) => {
+      worker.onmessage = async (e: MessageEvent<any>) => { // Use 'any' for now, will refine with MessageData later
         const { type, message, audio, sampling_rate, error } = e.data
         
         if (type === 'status') {
@@ -103,6 +108,8 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
           console.error('TTS Worker Error:', error)
           setModelStatus('Error: ' + error)
           setIsAudioGenerating(false)
+        } else if (type === 'disposed') {
+          // This message is handled during worker cleanup, no action here
         }
       }
       
@@ -120,7 +127,30 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
     
     return () => {
       stopAll()
-      if (workerRef.current) workerRef.current.terminate()
+      if (workerRef.current) {
+        const currentWorker = workerRef.current;
+        const originalOnMessage = currentWorker.onmessage;
+        currentWorker.onmessage = null; // Temporarily disable to avoid unexpected messages
+
+        const disposePromise = new Promise<void>((resolve) => {
+          const onDisposeMessage = (e: MessageEvent) => {
+            if (e.data.type === 'disposed') {
+              currentWorker.removeEventListener('message', onDisposeMessage);
+              resolve();
+            }
+          };
+          currentWorker.addEventListener('message', onDisposeMessage);
+          currentWorker.postMessage({ type: 'dispose' });
+        });
+
+        // Use an immediately invoked async function for cleanup
+        (async () => {
+          await disposePromise;
+          currentWorker.terminate();
+          // Restore original onmessage or set to null if no longer needed
+          // For cleanup, it's fine to keep it null as worker is terminated
+        })();
+      }
       if (audioCtxRef.current) audioCtxRef.current.close()
     }
   }, [])
@@ -145,6 +175,20 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
     setTotalDuration(0)
   }, [script])
 
+  // Auto-start synthesis when script and worker are ready
+  useEffect(() => {
+    if (isWorkerReady && script && segments.length > 0 && !isAudioGenerating && !isAudioReady && !isGenerating) {
+      startSynthesis()
+    }
+  }, [isWorkerReady, script, segments.length, isAudioGenerating, isAudioReady, isGenerating])
+
+  // Autoplay when all segments are ready
+  useEffect(() => {
+    if (isAudioReady && !isPlaying && curSegIdx === -1 && segments.length > 0) {
+      playSegment(0)
+    }
+  }, [isAudioReady])
+
   const handleWorkerResult = (audioData: Float32Array, samplingRate: number) => {
     if (!audioCtxRef.current) return
     
@@ -152,7 +196,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
     if (idx === -1) return
 
     const buf = audioCtxRef.current.createBuffer(1, audioData.length, samplingRate)
-    buf.copyToChannel(audioData, 0)
+    buf.getChannelData(0).set(audioData)
     
     const nextSegments = [...segmentsRef.current]
     nextSegments[idx].buf = buf
@@ -315,248 +359,130 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-paper flex flex-col overflow-hidden animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-50 bg-paper flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-500">
       <div className="fixed inset-0 pointer-events-none opacity-[0.03] newsprint-texture" />
 
-      <header className="border-b-4 border-ink p-6 flex justify-between items-center bg-paper relative z-10">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-ink flex items-center justify-center text-paper rounded-sm">
-            <Mic2 size={24} />
-          </div>
-          <div>
-            <h2 className="font-display font-black uppercase text-xl tracking-tight">Podcast Studio</h2>
-            <p className="font-mono text-[10px] uppercase font-bold text-ink/40 tracking-widest">On-Device Synthesis</p>
-          </div>
+      {/* Modern Header */}
+      <header className="p-4 flex justify-between items-center bg-paper/80 backdrop-blur-sm relative z-20">
+        <button 
+          onClick={onClose}
+          className="p-2 hover:bg-ink hover:text-paper transition-colors rounded-full border-2 border-ink"
+        >
+          <ChevronDown size={24} />
+        </button>
+        
+        <div className="text-center flex-1 mx-4 overflow-hidden">
+          <p className="font-mono text-[9px] uppercase font-black tracking-[0.2em] text-ink/40 mb-0.5">Now Playing</p>
+          <h2 className="font-display font-black uppercase text-sm tracking-tight truncate px-4">{paper.title}</h2>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-3 px-4 py-2 border-2 border-ink bg-paper shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            <div className={`w-2 h-2 rounded-full ${(!isWorkerReady || isAudioGenerating) ? 'bg-editorial animate-pulse' : 'bg-green-600'}`} />
-            <span className="font-mono text-[10px] uppercase font-bold tracking-widest">
-              {modelStatus}
-            </span>
-          </div>
-          
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-ink hover:text-paper transition-colors border-2 border-transparent hover:border-ink"
-          >
-            <X size={24} />
-          </button>
-        </div>
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className={`p-2 transition-colors rounded-full border-2 border-ink ${showSettings ? 'bg-ink text-paper' : 'hover:bg-ink hover:text-paper'}`}
+        >
+          <Settings2 size={20} />
+        </button>
       </header>
 
-      <main className="flex-1 overflow-hidden flex flex-col lg:flex-row relative z-10">
-        <section className="flex-1 border-r-4 border-ink flex flex-col overflow-hidden">
-          <div className="flex border-b-2 border-ink bg-paper">
-            <button 
-              onClick={() => setActiveTab('visualizer')}
-              className={`px-6 py-3 font-mono text-[10px] uppercase font-black tracking-widest border-r-2 border-ink transition-colors ${activeTab === 'visualizer' ? 'bg-ink text-paper' : 'bg-paper text-ink hover:bg-ink/5'}`}
-            >
-              Visualizer
-            </button>
-            <button 
-              onClick={() => setActiveTab('script')}
-              className={`px-6 py-3 font-mono text-[10px] uppercase font-black tracking-widest transition-colors ${activeTab === 'script' ? 'bg-ink text-paper' : 'bg-paper text-ink hover:bg-ink/5'}`}
-            >
-              Teleprompter
-            </button>
-          </div>
-          
-          <div className="flex-1 relative overflow-hidden">
-            {activeTab === 'visualizer' ? (
-              <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 bg-editorial/5">
-                <div className="w-full max-w-lg aspect-square border-4 border-ink bg-paper relative shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center overflow-hidden">
-                   {isPlaying ? (
-                      <div className="flex items-end justify-center gap-1.5 h-32">
-                         {[...Array(12)].map((_, i) => (
-                            <div 
-                              key={i} 
-                              className="w-3 bg-ink animate-waveform" 
-                              style={{ 
-                                 animationDelay: `${i * 0.1}s`,
-                                 height: '20%' 
-                              }} 
-                            />
-                         ))}
-                      </div>
-                   ) : (
-                      <div className="text-center space-y-4">
-                        <Mic2 size={64} className="mx-auto text-ink/10" />
-                        <p className="font-mono text-[10px] uppercase font-black tracking-widest text-ink/20">Studio Idle</p>
-                      </div>
-                   )}
-
-                   <div className="absolute bottom-4 left-4 right-4 bg-paper border-2 border-ink p-3 flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${isPlaying || isAudioGenerating ? 'bg-editorial animate-pulse' : 'bg-ink/20'}`} />
-                      <div className="flex-1 overflow-hidden text-left">
-                         <p className="font-mono text-[9px] uppercase font-black tracking-widest truncate">
-                           {isAudioGenerating ? 'Synthesizing Audio' : isPlaying ? 'Live Playback' : isGenerating ? 'Scripting' : 'System Ready'}
-                         </p>
-                         <p className="font-display text-[10px] truncate italic">
-                           {paper.title}
-                         </p>
-                      </div>
-                   </div>
-                </div>
-              </div>
-            ) : (
-              <div className="h-full overflow-y-auto p-8 sm:p-12 space-y-8 custom-scrollbar bg-paper">
-                {segments.map((seg, i) => (
-                  <div 
-                    key={i}
-                    className={`transition-all duration-500 p-4 border-l-4 ${
-                      curSegIdx === i 
-                        ? 'border-editorial bg-editorial/5 opacity-100 scale-[1.02]' 
-                        : seg.status === 'done' 
-                          ? 'border-ink/20 opacity-40' 
-                          : 'border-transparent opacity-80'
-                    }`}
-                  >
-                    <p className={`font-display text-2xl leading-relaxed italic ${curSegIdx === i ? 'text-ink font-bold' : 'text-ink/60'}`}>
-                      {seg.text}
-                    </p>
-                    {seg.status === 'loading' && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <Loader2 size={12} className="animate-spin text-editorial" />
-                        <span className="font-mono text-[8px] uppercase font-bold text-editorial tracking-widest">Synthesizing...</span>
-                      </div>
-                    )}
+      <main className="flex-1 flex flex-col relative z-10 overflow-hidden">
+        {/* Artwork / Visualizer Area */}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
+          <div className="w-full max-w-[320px] aspect-square relative group">
+            <div className="absolute inset-0 bg-ink translate-x-3 translate-y-3" />
+            <div className="absolute inset-0 border-4 border-ink bg-paper p-8 flex flex-col items-center justify-center overflow-hidden transition-transform active:scale-95">
+               {isPlaying ? (
+                  <div className="flex items-end justify-center gap-2 h-40 w-full">
+                     {[...Array(12)].map((_, i) => (
+                        <div 
+                          key={i} 
+                          className="w-2.5 bg-ink animate-waveform" 
+                          style={{ 
+                             animationDelay: `${i * 0.15}s`,
+                             height: '15%' 
+                          }} 
+                        />
+                     ))}
                   </div>
-                ))}
-                {isGenerating && (
-                  <div className="p-4 border-l-4 border-dashed border-ink/20 animate-pulse">
-                    <p className="font-display text-2xl leading-relaxed italic text-ink/20">
-                      Writing script...
-                    </p>
+               ) : (
+                  <div className="text-center space-y-4">
+                    <div className="w-20 h-20 border-4 border-ink flex items-center justify-center mx-auto bg-editorial/5">
+                      {isAudioGenerating || isGenerating ? (
+                        <Loader2 size={40} className="animate-spin text-editorial" />
+                      ) : (
+                        <Mic2 size={40} className="text-ink/20" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-display font-black text-xs uppercase tracking-widest">
+                        {isAudioGenerating ? 'Synthesizing...' : isGenerating ? 'Writing Script...' : 'Ready to Play'}
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
+               )}
+            </div>
           </div>
-        </section>
 
-        <section className="lg:w-96 bg-paper border-t-4 lg:border-t-0 lg:border-l-4 border-ink flex flex-col overflow-y-auto">
-          <div className="p-8 space-y-8">
-            <div className="space-y-6">
-              {!isAudioReady && !isAudioGenerating && (
-                <button 
-                  onClick={startSynthesis}
-                  disabled={isGenerating || !isWorkerReady}
-                  className="w-full py-6 border-4 border-ink bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all disabled:opacity-30 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-2 active:translate-y-2 flex flex-col items-center gap-2"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 size={32} className="animate-spin" />
-                      <span className="font-display font-black uppercase text-xl">Waiting for Script...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Headphones size={32} />
-                      <span className="font-display font-black uppercase text-xl">Generate Audio</span>
-                    </>
-                  )}
+          <div className="w-full max-w-[320px] text-left space-y-1">
+            <h3 className="font-display font-black text-2xl leading-tight uppercase line-clamp-2">{paper.title}</h3>
+            <p className="font-mono text-[10px] uppercase font-bold text-ink/60 tracking-widest truncate">
+              {paper.authors.join(', ')}
+            </p>
+          </div>
+        </div>
+
+        {/* Script / Lyrics Overlay (Music-player style) */}
+        {showScript && (
+          <div className="absolute inset-x-0 top-0 bottom-[140px] bg-paper z-30 p-8 pt-12 overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom duration-300">
+            <div className="max-w-md mx-auto space-y-8 pb-12">
+              <div className="flex justify-between items-center mb-12">
+                <h4 className="font-mono text-xs uppercase font-black tracking-widest border-b-2 border-ink pb-2">Script / Teleprompter</h4>
+                <button onClick={() => setShowScript(false)} className="p-2 border-2 border-ink rounded-full">
+                  <X size={16} />
                 </button>
-              )}
-
-              {isAudioGenerating && (
-                <div className="w-full py-8 border-4 border-ink bg-paper flex flex-col items-center gap-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                  <Loader2 size={48} className="animate-spin text-editorial" />
-                  <div className="text-center">
-                    <p className="font-display font-black uppercase text-xl text-ink">Synthesizing</p>
-                    <p className="font-mono text-[10px] text-ink/40 uppercase tracking-widest">Transforming text to voice</p>
-                  </div>
+              </div>
+              {segments.map((seg, i) => (
+                <div 
+                  key={i}
+                  className={`transition-all duration-700 ${
+                    curSegIdx === i 
+                      ? 'opacity-100 scale-105 origin-left' 
+                      : 'opacity-20 blur-[1px]'
+                  }`}
+                >
+                  <p className={`font-display text-3xl leading-snug italic font-black uppercase tracking-tighter ${curSegIdx === i ? 'text-editorial' : 'text-ink'}`}>
+                    {seg.text}
+                  </p>
                 </div>
-              )}
-
-              {isAudioReady && (
-                <div className="space-y-6 animate-in slide-in-from-bottom duration-500">
-                  <div className="space-y-2">
-                    <div className="flex justify-between font-mono text-[10px] uppercase font-black tracking-widest">
-                      <span>{formatTime(currentTime)}</span>
-                      <span>{formatTime(totalDuration)}</span>
-                    </div>
-                    <div className="h-4 border-2 border-ink bg-paper relative overflow-hidden group cursor-pointer">
-                      <div 
-                        className="absolute inset-y-0 left-0 bg-editorial transition-all duration-300" 
-                        style={{ width: `${(currentTime / (totalDuration || 1)) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-4">
-                    <button 
-                      onClick={() => {
-                        const prev = Math.max(0, curSegIdx - 1)
-                        stopAll()
-                        playSegment(prev)
-                      }}
-                      disabled={curSegIdx <= 0}
-                      className="p-4 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                    >
-                      <SkipBack size={20} />
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        if (isPlaying) pausePlayback()
-                        else {
-                          if (curSegIdx === -1) playSegment(0)
-                          else playSegment(curSegIdx, segOffsetRef.current)
-                        }
-                      }}
-                      className="p-6 border-4 border-ink bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                    >
-                      {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" />}
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        const next = Math.min(segments.length - 1, curSegIdx + 1)
-                        stopAll()
-                        playSegment(next)
-                      }}
-                      disabled={curSegIdx === -1 || curSegIdx >= segments.length - 1}
-                      className="p-4 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                    >
-                      <SkipForward size={20} />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-4">
-                    <button 
-                      onClick={stopAll}
-                      className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-paper hover:bg-editorial hover:text-paper transition-all font-mono text-[10px] uppercase font-black tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                    >
-                      <Square size={14} fill="currentColor" />
-                      <span>Stop</span>
-                    </button>
-                    <button 
-                      onClick={() => { stopAll(); playSegment(0); }}
-                      className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all font-mono text-[10px] uppercase font-black tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                    >
-                      <RotateCcw size={14} />
-                      <span>Restart</span>
-                    </button>
-                  </div>
+              ))}
+              {(isGenerating || isAudioGenerating) && (
+                <div className="animate-pulse space-y-4 opacity-10">
+                   <div className="h-8 bg-ink w-full" />
+                   <div className="h-8 bg-ink w-3/4" />
                 </div>
               )}
             </div>
+          </div>
+        )}
 
-            <div className="border-t-2 border-ink pt-8 space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                   <Volume2 size={16} />
-                   <label className="font-mono text-[10px] uppercase font-black tracking-widest">Narrator Voice</label>
-                </div>
+        {/* Settings Overlay */}
+        {showSettings && (
+          <div className="absolute inset-x-4 top-20 bg-paper z-40 border-4 border-ink shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b-2 border-ink pb-4">
+              <h4 className="font-mono text-[10px] uppercase font-black tracking-widest">Player Settings</h4>
+              <button onClick={() => setShowSettings(false)}><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="font-mono text-[9px] uppercase font-black tracking-widest text-ink/40">Narrator Voice</label>
                 <select 
                   value={voice}
                   onChange={(e) => {
                     setVoice(e.target.value)
-                    setIsAudioReady(false) // Require re-synthesis if voice changes
+                    setIsAudioReady(false)
+                    setShowSettings(false)
                   }}
-                  disabled={isAudioGenerating}
-                  className="w-full bg-paper border-2 border-ink p-3 font-mono text-xs focus:ring-2 focus:ring-editorial outline-none disabled:opacity-50"
+                  className="w-full bg-paper border-2 border-ink p-3 font-mono text-xs focus:ring-0 outline-none"
                 >
                   {VOICES.map(v => (
                     <option key={v.id} value={v.id}>{v.name}</option>
@@ -565,22 +491,92 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                 <div className="p-4 border-2 border-ink bg-paper text-center">
-                    <Cpu size={20} className="mx-auto mb-2 text-ink/40" />
-                    <p className="font-mono text-[8px] uppercase text-ink/40 mb-1">Compute Unit</p>
-                    <p className="font-mono text-[10px] font-black uppercase">{device}</p>
-                 </div>
-                 <div className="p-4 border-2 border-ink bg-paper text-center">
-                    <div className="mx-auto mb-2 flex items-center justify-center h-5">
-                       {(!isWorkerReady || isAudioGenerating) ? <Loader2 size={16} className="animate-spin text-editorial" /> : <div className="w-4 h-4 rounded-full bg-green-600" />}
-                    </div>
-                    <p className="font-mono text-[8px] uppercase text-ink/40 mb-1">Pipeline Status</p>
-                    <p className="font-mono text-[10px] font-black uppercase">{isWorkerReady ? 'Ready' : 'Standby'}</p>
-                 </div>
+                <div className="p-3 border-2 border-ink bg-ink/5">
+                  <p className="font-mono text-[8px] uppercase text-ink/40 mb-1">Compute</p>
+                  <p className="font-mono text-[10px] font-black uppercase">{device}</p>
+                </div>
+                <div className="p-3 border-2 border-ink bg-ink/5">
+                  <p className="font-mono text-[8px] uppercase text-ink/40 mb-1">Status</p>
+                  <p className="font-mono text-[10px] font-black uppercase truncate">{modelStatus}</p>
+                </div>
               </div>
             </div>
           </div>
-        </section>
+        )}
+
+        {/* Persistent Bottom Player Controls */}
+        <div className="bg-paper border-t-4 border-ink p-6 pb-10 space-y-6 relative z-20 shadow-[0_-8px_24px_rgba(0,0,0,0.05)]">
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="h-2 border-2 border-ink bg-paper relative cursor-pointer overflow-hidden group">
+              <div 
+                className="absolute inset-y-0 left-0 bg-editorial transition-all duration-300" 
+                style={{ width: `${(currentTime / (totalDuration || 1)) * 100}%` }}
+              />
+            </div>
+            <div className="flex justify-between font-mono text-[9px] uppercase font-black tracking-widest text-ink/60">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(totalDuration)}</span>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-between">
+            <button 
+              onClick={() => setShowScript(!showScript)}
+              className={`p-3 transition-colors ${showScript ? 'text-editorial' : 'text-ink/40 hover:text-ink'}`}
+            >
+              <List size={20} />
+            </button>
+
+            <div className="flex items-center gap-8">
+              <button 
+                onClick={() => {
+                  const prev = Math.max(0, curSegIdx - 1)
+                  stopAll()
+                  playSegment(prev)
+                }}
+                disabled={curSegIdx <= 0}
+                className="text-ink hover:text-editorial transition-colors disabled:opacity-20"
+              >
+                <SkipBack size={28} fill="currentColor" />
+              </button>
+
+              <button 
+                onClick={() => {
+                  if (isPlaying) pausePlayback()
+                  else {
+                    if (curSegIdx === -1) playSegment(0)
+                    else playSegment(curSegIdx, segOffsetRef.current)
+                  }
+                }}
+                disabled={!isAudioReady && !isPlaying}
+                className="w-20 h-20 rounded-full border-4 border-ink flex items-center justify-center bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all active:scale-95 disabled:opacity-20 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+              >
+                {isPlaying ? <Pause size={40} fill="currentColor" /> : <Play size={40} className="ml-2" fill="currentColor" />}
+              </button>
+
+              <button 
+                onClick={() => {
+                  const next = Math.min(segments.length - 1, curSegIdx + 1)
+                  stopAll()
+                  playSegment(next)
+                }}
+                disabled={curSegIdx === -1 || curSegIdx >= segments.length - 1}
+                className="text-ink hover:text-editorial transition-colors disabled:opacity-20"
+              >
+                <SkipForward size={28} fill="currentColor" />
+              </button>
+            </div>
+
+            <button 
+              onClick={() => { stopAll(); playSegment(0); }}
+              className="p-3 text-ink/40 hover:text-ink transition-colors"
+            >
+              <RotateCcw size={20} />
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   )

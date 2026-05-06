@@ -3,10 +3,11 @@
 // Uses transformers.js for WebGPU-accelerated (or WASM fallback) inference
 
 import { pipeline, env, TextGenerationPipeline } from '@huggingface/transformers'
+import { OPFSCache } from '../lib/opfs-cache'
 
 // Transformers.js needs to resolve WASM/model files at a known base URL.
 env.allowLocalModels = false
-env.useBrowserCache = true   // cache downloaded weights in IndexedDB
+env.useBrowserCache = true   // default to true, will be overridden if OPFS works
 
 // Configure ONNX Runtime for maximum performance
 if (env.backends?.onnx?.wasm) {
@@ -25,7 +26,7 @@ interface Metrics {
 type QuantDtype = 'auto' | 'q4' | 'q8' | 'fp16' | 'fp32' | 'int8' | 'uint8' | 'bnb4' | 'q4f16'
 
 interface MessageData {
-  type: 'init' | 'summarize' | 'infer'
+  type: 'init' | 'summarize' | 'infer' | 'dispose'
   text?: string
   prompt?: string
   messages?: { role: string; content: string }[]
@@ -87,6 +88,17 @@ async function initializeModel(
     progress: 0,
     backend: device
   })
+
+  // Configure transformers.js to use OPFS for caching if available
+  try {
+    const opfsCache = await OPFSCache.open('llm-cache')
+    env.useBrowserCache = false
+    env.useCustomCache = true
+    env.customCache = opfsCache as any
+    log('OPFS Model Cache initialized')
+  } catch (e) {
+    log('Failed to initialize OPFS cache, using defaults', e)
+  }
 
   // dtype selection: q4 for WebGPU (safe memory), q8 for WASM (CPU-friendly)
   const dtype: QuantDtype = preferredDtype || (device === 'webgpu' ? 'q4' : 'q8')
@@ -271,6 +283,15 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
         if (!iInput) throw new Error('No prompt or messages provided for inference')
         const { result, metrics: iMetrics } = await infer(iInput, params, sectionId)
         self.postMessage({ type: 'infer-complete', requestId: sectionId, result, metrics: iMetrics })
+        break
+
+      case 'dispose':
+        if (generator) {
+          generator.dispose?.()
+          generator = null
+          modelLoaded = false
+        }
+        self.postMessage({ type: 'disposed' })
         break
 
       default:
