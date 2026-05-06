@@ -26,7 +26,17 @@ function App() {
   const [showModelModal, setShowModelModal] = useState(false)
   
   const opfsHooks = useOPFS()
-  const { initialized, error: llmError, initProgress, initLoadingPercent, isDownloading, activeModel, downloadModel, summarize } = useLLM()
+  const { 
+    initialized, 
+    error: llmError, 
+    initProgress, 
+    initLoadingPercent, 
+    isDownloading, 
+    activeModel, 
+    downloadModel, 
+    summarize,
+    createPodcastScript 
+  } = useLLM()
   const library = useLibrary()
 
   // Initialize OPFS and paperStorage on mount
@@ -210,6 +220,7 @@ function App() {
                     initialized={initialized}
                     llmError={llmError}
                     summarize={summarize}
+                    createPodcastScript={createPodcastScript}
                   />
 
                   {/* PageIndex Traversal Chat */}

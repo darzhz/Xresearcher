@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Bookmark, BookmarkCheck, Trash2, Loader } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Trash2, Loader, Mic2 } from 'lucide-react'
 import { PaperData, ArxivMetadata } from '../types'
 import { SectionSummary } from './SectionSummary'
+import { PodcastView } from './PodcastView'
 
 interface SummaryViewProps {
   paper: PaperData
@@ -12,6 +13,7 @@ interface SummaryViewProps {
   initialized: boolean
   llmError: string | null
   summarize: (text: string, onToken?: (token: string) => void) => Promise<{ summary: string; metrics: any }>
+  createPodcastScript?: (paper: PaperData, onToken?: (token: string) => void) => Promise<{ script: string; metrics: any }>
 }
 
 export function SummaryView({ 
@@ -22,10 +24,14 @@ export function SummaryView({
   onRemove,
   initialized, 
   llmError, 
-  summarize 
+  summarize,
+  createPodcastScript
 }: SummaryViewProps) {
   const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [podcastScript, setPodcastScript] = useState<string | null>(null)
+  const [isGeneratingPodcast, setIsGeneratingPodcast] = useState(false)
+  const [showPodcast, setShowPodcast] = useState(false)
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -36,8 +42,36 @@ export function SummaryView({
     }
   }
 
+  const handleGeneratePodcast = async () => {
+    if (podcastScript) {
+      setShowPodcast(true)
+      return
+    }
+
+    if (!createPodcastScript || !initialized) return
+
+    setIsGeneratingPodcast(true)
+    try {
+      const { script } = await createPodcastScript(paper)
+      setPodcastScript(script)
+      setShowPodcast(true)
+    } catch (err) {
+      console.error('Failed to generate podcast script:', err)
+    } finally {
+      setIsGeneratingPodcast(false)
+    }
+  }
+
   return (
     <div className="space-y-12">
+      {showPodcast && podcastScript && (
+        <PodcastView 
+          paper={paper} 
+          script={podcastScript} 
+          onClose={() => setShowPodcast(false)} 
+        />
+      )}
+
       {/* Title Header */}
       <div className="border-b-4 border-ink pb-8 relative group">
         <div className="flex flex-col md:flex-row justify-between items-start gap-8">
@@ -57,6 +91,19 @@ export function SummaryView({
               <p className="font-mono text-[10px] uppercase font-bold tracking-widest text-ink/60">
                 Ref: {paper.arxivId}
               </p>
+              <div className="h-4 w-px bg-divider hidden sm:block" />
+              <button
+                onClick={handleGeneratePodcast}
+                disabled={!initialized || isGeneratingPodcast}
+                className="flex items-center gap-2 font-mono text-[10px] uppercase font-black tracking-widest text-editorial hover:underline transition-all disabled:opacity-40"
+              >
+                {isGeneratingPodcast ? (
+                  <Loader size={12} className="animate-spin" />
+                ) : (
+                  <Mic2 size={12} />
+                )}
+                <span>{isGeneratingPodcast ? 'Synthesizing Script...' : podcastScript ? 'Open Podcast' : 'Generate Podcast'}</span>
+              </button>
             </div>
           </div>
           

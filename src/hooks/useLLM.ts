@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ModelConfig } from '../lib/models'
 import { MODELS } from '../lib/models'
 import * as engine from '../lib/llm/engine'
-import { summarizeLargeText } from '../lib/llm/summarize'
+import { summarizeLargeText, generatePodcastScript } from '../lib/llm/summarize'
+import { PaperData } from '../types'
 
 export function useLLM() {
   const [initialized, setInitialized] = useState(engine.isInitialized())
@@ -55,6 +56,22 @@ export function useLLM() {
     []
   )
 
+  const createPodcastScript = useCallback(
+    async (paper: PaperData, onToken?: (token: string) => void): Promise<{ script: string; metrics: any }> => {
+      if (!engine.isInitialized()) {
+        throw new Error('Model is not loaded. Please download the AI model first.')
+      }
+
+      return generatePodcastScript(paper, {
+        onToken,
+        onProgress: (pct, stage) => {
+          console.log(`[useLLM:Podcast] ${stage}: ${pct.toFixed(0)}%`)
+        }
+      })
+    },
+    []
+  )
+
   const queryLLM = useCallback(
     async (prompt: string, onToken?: (token: string) => void): Promise<{ result: string; metrics?: any }> => {
       if (!engine.isInitialized()) {
@@ -75,6 +92,7 @@ export function useLLM() {
     activeModel,
     downloadModel,
     summarize,
+    createPodcastScript,
     queryLLM
   }
 }
