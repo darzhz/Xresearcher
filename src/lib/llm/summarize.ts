@@ -247,18 +247,16 @@ export async function generatePodcastScript(
 
   const prompt = [
     { role: 'system', content: 'You are an expert science communicator and podcast host.' },
-    { role: 'user', content: `Convert this research paper into a warm, engaging, and professional 1-minute podcast script for a single narrator. 
+    { role: 'user', content: `Convert this research paper into a warm, engaging, and professional 30-second podcast script for a single narrator. 
     
     Structure:
     1. Welcome listeners to "ArXiv Local-Voice".
-    2. Introduce the paper: "${paper.title}" by ${paper.authors.slice(0, 2).join(', ')}${paper.authors.length > 2 ? ' et al.' : ''}.
-    3. Explain the core problem and why it matters in simple terms.
-    4. Describe the innovative approach or method used.
-    5. Share the key findings or results.
-    6. Conclude with a thought on the impact of this work.
-    7. Sign off with: "Thanks for listening to this local AI-generated summary."
+    2. Introduce the paper: "${paper.title}" by ${paper.authors.slice(0, 1).join(', ')}${paper.authors.length > 1 ? ' et al.' : ''}.
+    3. Explain the core problem and why it matters.
+    4. Share the key finding.
+    5. Sign off with: "Thanks for listening to this local AI-generated summary."
     
-    Tone: Conversational, clear, and informative. Keep it under 200 words.
+    Tone: Conversational, clear, and informative. Keep it under 100 words.
     
     Paper Content Highlights:
     ${dense}` }
@@ -267,7 +265,7 @@ export async function generatePodcastScript(
   const { result, metrics } = await inferStream(
     prompt,
     token => onToken?.(token),
-    { maxTokens: 400, temperature: 0.7 }
+    { maxTokens: 200, temperature: 0.7 }
   )
 
   onProgress?.(100, 'Done')

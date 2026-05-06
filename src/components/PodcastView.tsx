@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { 
   Play, 
   Pause, 
@@ -11,9 +11,9 @@ import {
   Cpu, 
   Zap,
   Loader2,
-  Volume2
+  Volume2,
+  Headphones
 } from 'lucide-react'
-import { KokoroTTS } from 'kokoro-js'
 import { PaperData } from '../types'
 
 interface PodcastViewProps {
@@ -41,12 +41,13 @@ const VOICES = [
 ]
 
 export function PodcastView({ paper, script, onClose, isGenerating }: PodcastViewProps) {
-  // TTS & Audio State
-  const [tts, setTts] = useState<any>(null)
-  const [loadingModel, setLoadingModel] = useState(true)
+  // TTS Worker State
+  const workerRef = useRef<Worker | null>(null)
   const [modelStatus, setModelStatus] = useState('Initializing...')
+  const [isWorkerReady, setIsWorkerReady] = useState(false)
   const [device, setDevice] = useState<'webgpu' | 'wasm'>('wasm')
   
+  // Audio State
   const [segments, setSegments] = useState<Segment[]>([])
   const [curSegIdx, setCurSegIdx] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -55,6 +56,8 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   
   const [totalDuration, setTotalDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
+  const [isAudioGenerating, setIsAudioGenerating] = useState(false)
+  const [isAudioReady, setIsAudioReady] = useState(false)
   
   // Refs
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -69,13 +72,10 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   const segOffsetRef = useRef(0)
   const elapsedBeforeCurRef = useRef(0)
   
-  // Incremental processing state
-  const lastProcessedLenRef = useRef(0)
-  const synthesizingRef = useRef(false)
-
-  // Initialize
+  // Initialize Worker and AudioContext
   useEffect(() => {
     const init = async () => {
+      // GPU Detection
       const gpuAvailable = !!(navigator as any).gpu
       let selectedDevice: 'webgpu' | 'wasm' = 'wasm'
       if (gpuAvailable) {
@@ -86,163 +86,137 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
       }
       setDevice(selectedDevice)
       
-      try {
-        const dtype = selectedDevice === 'webgpu' ? 'fp32' : 'q8'
-        setModelStatus(`Loading Kokoro-82M (${selectedDevice.toUpperCase()})...`)
+      // Initialize Worker
+      const worker = new Worker(new URL('../workers/tts.worker.ts', import.meta.url), { type: 'module' })
+      workerRef.current = worker
+      
+      worker.onmessage = async (e) => {
+        const { type, message, audio, sampling_rate, error } = e.data
         
-        const model = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
-          device: selectedDevice,
-          dtype: dtype,
-        })
-        
-        setTts(model)
-        setLoadingModel(false)
-        setModelStatus('Model Ready')
-      } catch (err) {
-        console.error('Failed to load TTS model', err)
-        setModelStatus('Error loading model')
+        if (type === 'status') {
+          setModelStatus(message)
+        } else if (type === 'init-complete') {
+          setModelStatus('Model Ready')
+          setIsWorkerReady(true)
+        } else if (type === 'result') {
+          handleWorkerResult(audio, sampling_rate)
+        } else if (type === 'error') {
+          console.error('TTS Worker Error:', error)
+          setModelStatus('Error: ' + error)
+          setIsAudioGenerating(false)
+        }
       }
+      
+      const dtype = selectedDevice === 'webgpu' ? 'fp32' : 'q8'
+      worker.postMessage({ type: 'init', device: selectedDevice, dtype })
+      
+      // Initialize AudioContext
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      analyserRef.current = audioCtxRef.current.createAnalyser()
+      analyserRef.current.fftSize = 512
+      analyserRef.current.connect(audioCtxRef.current.destination)
     }
     
     init()
     
     return () => {
       stopAll()
+      if (workerRef.current) workerRef.current.terminate()
       if (audioCtxRef.current) audioCtxRef.current.close()
     }
   }, [])
 
-  // Process script changes
+  // Process script into segments only when generation is done or updated
   useEffect(() => {
-    if (!tts || !script) return
+    if (!script) return
+    
+    const sentences = script.match(/[^.!?\n]+[.!?\n]*/g) || []
+    const newSegments: Segment[] = sentences
+      .map(s => s.trim())
+      .filter(s => s.length > 2)
+      .map(text => ({
+        text,
+        buf: null,
+        status: 'pending'
+      }))
+    
+    setSegments(newSegments)
+    segmentsRef.current = newSegments
+    setIsAudioReady(false)
+    setTotalDuration(0)
+  }, [script])
 
-    // If script is reset (e.g. starting a new generation), reset segments
-    if (script.length < lastProcessedLenRef.current) {
-      stopAll()
-      setSegments([])
-      segmentsRef.current = []
-      lastProcessedLenRef.current = 0
+  const handleWorkerResult = (audioData: Float32Array, samplingRate: number) => {
+    if (!audioCtxRef.current) return
+    
+    const idx = segmentsRef.current.findIndex(s => s.status === 'loading')
+    if (idx === -1) return
+
+    const buf = audioCtxRef.current.createBuffer(1, audioData.length, samplingRate)
+    buf.copyToChannel(audioData, 0)
+    
+    const nextSegments = [...segmentsRef.current]
+    nextSegments[idx].buf = buf
+    nextSegments[idx].status = 'ready'
+    
+    setSegments(nextSegments)
+    segmentsRef.current = nextSegments
+    
+    // Recalculate total duration
+    const newTotalDur = nextSegments.reduce((acc, s) => acc + (s.buf?.duration || 0), 0)
+    setTotalDuration(newTotalDur)
+
+    // Check if more segments need synthesis
+    const nextPending = nextSegments.findIndex(s => s.status === 'pending')
+    if (nextPending !== -1) {
+      synthesizeSegment(nextPending)
+    } else {
+      setIsAudioGenerating(false)
+      setIsAudioReady(true)
     }
-
-    processNewScriptContent()
-  }, [tts, script, voice, speed])
-
-  const processNewScriptContent = async () => {
-    if (synthesizingRef.current) return
-    
-    // Find new complete sentences
-    const content = script
-    const sentences = content.match(/[^.!?\n]+[.!?\n]*/g) || []
-    
-    // We only process sentences that are likely complete (have punctuation)
-    // unless we are no longer generating.
-    const completedSentences = isGenerating 
-      ? sentences.filter(s => /[.!?\n]$/.test(s)) 
-      : sentences
-
-    const newSegmentsToAdd: Segment[] = []
-    
-    // Starting from the last processed index, add new segments
-    let currentProcessedCount = segmentsRef.current.length
-    if (completedSentences.length > currentProcessedCount) {
-      for (let i = currentProcessedCount; i < completedSentences.length; i++) {
-        const text = completedSentences[i].trim()
-        if (text.length > 2) {
-          newSegmentsToAdd.push({
-            text,
-            buf: null,
-            status: 'pending'
-          })
-        }
-      }
-    }
-
-    if (newSegmentsToAdd.length === 0) return
-
-    // Update state with pending segments
-    const updatedSegments = [...segmentsRef.current, ...newSegmentsToAdd]
-    setSegments(updatedSegments)
-    segmentsRef.current = updatedSegments
-    lastProcessedLenRef.current = content.length
-
-    // Start synthesis loop if not already running
-    synthesizePendingSegments()
   }
 
-  const synthesizePendingSegments = async () => {
-    if (synthesizingRef.current || !tts) return
-    synthesizingRef.current = true
-
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-      analyserRef.current = audioCtxRef.current.createAnalyser()
-      analyserRef.current.fftSize = 512
-      analyserRef.current.connect(audioCtxRef.current.destination)
-    }
-
-    while (true) {
-      const idx = segmentsRef.current.findIndex(s => s.status === 'pending')
-      if (idx === -1) break
-
-      updateSegmentStatus(idx, 'loading')
-      try {
-        const out = await tts.generate(segmentsRef.current[idx].text, { voice, speed })
-        const f32 = out.audio instanceof Float32Array ? out.audio : new Float32Array(out.audio)
-        const sr = out.sampling_rate || 24000
-        
-        const buf = audioCtxRef.current.createBuffer(1, f32.length, sr)
-        buf.copyToChannel(f32, 0)
-        
-        const nextSegments = [...segmentsRef.current]
-        nextSegments[idx].buf = buf
-        nextSegments[idx].status = 'ready'
-        
-        setSegments(nextSegments)
-        segmentsRef.current = nextSegments
-        
-        // Recalculate total duration
-        const newTotalDur = nextSegments.reduce((acc, s) => acc + (s.buf?.duration || 0), 0)
-        setTotalDuration(newTotalDur)
-
-        // Auto-play first segment if nothing is playing
-        if (curSegIdxRef.current === -1 && !playingRef.current && idx === 0) {
-           playSegment(0)
-        }
-      } catch (err) {
-        console.error(`Failed to generate segment ${idx}`, err)
-        updateSegmentStatus(idx, 'error')
-      }
-    }
-
-    synthesizingRef.current = false
+  const startSynthesis = () => {
+    if (!isWorkerReady || isAudioGenerating || isGenerating) return
+    setIsAudioGenerating(true)
+    setIsAudioReady(false)
+    
+    // Reset any existing buffers/status
+    const resetSegments = segmentsRef.current.map(s => ({ ...s, buf: null, status: 'pending' as const }))
+    setSegments(resetSegments)
+    segmentsRef.current = resetSegments
+    
+    synthesizeSegment(0)
   }
 
-  const updateSegmentStatus = (idx: number, status: Segment['status']) => {
-    setSegments(prev => {
-      const next = [...prev]
-      if (next[idx]) next[idx].status = status
-      return next
+  const synthesizeSegment = (idx: number) => {
+    if (!workerRef.current || idx >= segmentsRef.current.length) {
+      setIsAudioGenerating(false)
+      setIsAudioReady(true)
+      return
+    }
+
+    const nextSegments = [...segmentsRef.current]
+    nextSegments[idx].status = 'loading'
+    setSegments(nextSegments)
+    segmentsRef.current = nextSegments
+
+    workerRef.current.postMessage({
+      type: 'generate',
+      text: nextSegments[idx].text,
+      voice,
+      speed
     })
-    if (segmentsRef.current[idx]) segmentsRef.current[idx].status = status
   }
 
   const playSegment = (idx: number, offset = 0) => {
-    if (idx < 0) return
-    if (idx >= segmentsRef.current.length) {
-      if (!isGenerating) onPlaybackEnded()
+    if (idx < 0 || idx >= segmentsRef.current.length) {
+      onPlaybackEnded()
       return
     }
 
     const seg = segmentsRef.current[idx]
-    if (!seg?.buf) {
-      // If still generating, we wait for this segment.
-      // For now, let's just stay on this index and wait.
-      setCurSegIdx(idx)
-      curSegIdxRef.current = idx
-      setIsPlaying(false)
-      playingRef.current = false
-      return
-    }
+    if (!seg?.buf) return
 
     if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume()
 
@@ -251,18 +225,16 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
     src.connect(analyserRef.current!)
     srcNodeRef.current = src
 
-    updateSegmentStatus(idx, 'playing')
+    setSegments(prev => prev.map((s, i) => i === idx ? { ...s, status: 'playing' } : s))
     setCurSegIdx(idx)
     curSegIdxRef.current = idx
 
     src.onended = () => {
       if (!playingRef.current) return
-      updateSegmentStatus(idx, 'done')
+      setSegments(prev => prev.map((s, i) => i === idx ? { ...s, status: 'done' } : s))
       elapsedBeforeCurRef.current += seg.buf!.duration
       
       const nextIdx = idx + 1
-      setCurSegIdx(nextIdx)
-      curSegIdxRef.current = nextIdx
       playSegment(nextIdx)
     }
 
@@ -307,9 +279,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
     segOffsetRef.current = 0
     setCurrentTime(0)
     
-    segmentsRef.current.forEach((s, i) => {
-      if (s.buf) updateSegmentStatus(i, 'ready')
-    })
+    setSegments(prev => prev.map(s => s.buf ? { ...s, status: 'ready' } : s))
 
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current)
@@ -320,6 +290,8 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
   const onPlaybackEnded = () => {
     setIsPlaying(false)
     playingRef.current = false
+    setCurSegIdx(-1)
+    curSegIdxRef.current = -1
     setCurrentTime(totalDuration)
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current)
@@ -343,7 +315,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
     const ct = playingRef.current 
       ? elapsedBeforeCurRef.current + (audioCtxRef.current!.currentTime - segStartedAtRef.current)
       : elapsedBeforeCurRef.current + segOffsetRef.current
-    setCurrentTime(ct)
+    setCurrentTime(Math.min(ct, totalDuration))
 
     // Visualizer
     const td = new Uint8Array(analyserRef.current.frequencyBinCount)
@@ -394,10 +366,8 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
 
   return (
     <div className="fixed inset-0 z-50 bg-paper flex flex-col overflow-hidden animate-in fade-in duration-300">
-      {/* Texture Overlay */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03] newsprint-texture" />
 
-      {/* Header */}
       <header className="border-b-4 border-ink p-6 flex justify-between items-center bg-paper relative z-10">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-ink flex items-center justify-center text-paper rounded-sm">
@@ -411,7 +381,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
 
         <div className="flex items-center gap-6">
           <div className="hidden md:flex items-center gap-3 px-4 py-2 border-2 border-ink bg-paper shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            <div className={`w-2 h-2 rounded-full ${loadingModel ? 'bg-editorial animate-pulse' : 'bg-green-600'}`} />
+            <div className={`w-2 h-2 rounded-full ${(!isWorkerReady || isAudioGenerating) ? 'bg-editorial animate-pulse' : 'bg-green-600'}`} />
             <span className="font-mono text-[10px] uppercase font-bold tracking-widest">
               {modelStatus}
             </span>
@@ -426,9 +396,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3 relative z-10">
-        {/* Left: Script/Teleprompter */}
         <section className="lg:col-span-2 border-r-4 border-ink flex flex-col overflow-hidden">
           <div className="p-4 border-b-2 border-ink bg-ink/5 flex justify-between items-center">
             <span className="font-mono text-[10px] uppercase font-black tracking-widest">Script Teleprompter</span>
@@ -450,10 +418,10 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
                 <p className={`font-display text-2xl leading-relaxed italic ${curSegIdx === i ? 'text-ink font-bold' : 'text-ink/60'}`}>
                   {seg.text}
                 </p>
-                {seg.status === 'loading' && curSegIdx === i && (
+                {seg.status === 'loading' && (
                   <div className="flex items-center gap-2 mt-2">
                     <Loader2 size={12} className="animate-spin text-editorial" />
-                    <span className="font-mono text-[8px] uppercase font-bold text-editorial tracking-widest">Synthesizing Audio...</span>
+                    <span className="font-mono text-[8px] uppercase font-bold text-editorial tracking-widest">Synthesizing...</span>
                   </div>
                 )}
               </div>
@@ -461,22 +429,20 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
             {isGenerating && (
               <div className="p-4 border-l-4 border-dashed border-ink/20 animate-pulse">
                 <p className="font-display text-2xl leading-relaxed italic text-ink/20">
-                  Generating next segments...
+                  Writing script...
                 </p>
               </div>
             )}
           </div>
         </section>
 
-        {/* Right: Controls & Viz */}
         <section className="bg-editorial/5 flex flex-col overflow-y-auto">
           <div className="p-8 space-y-8">
-            {/* Visualizer Card */}
             <div className="border-4 border-ink bg-paper aspect-square relative shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
               <canvas ref={canvasRef} className="w-full h-full" width={400} height={400} />
               
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {!isPlaying && curSegIdx === -1 && (
+                {!isPlaying && !isAudioGenerating && (
                   <div className="text-center space-y-4">
                     <Mic2 size={48} className="mx-auto text-ink/10" />
                     <p className="font-mono text-[10px] uppercase font-black tracking-widest text-ink/20">Studio Idle</p>
@@ -485,10 +451,10 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
               </div>
 
               <div className="absolute bottom-4 left-4 right-4 bg-paper border-2 border-ink p-3 flex items-center gap-3">
-                 <div className="w-2 h-2 rounded-full bg-editorial animate-pulse" />
+                 <div className={`w-2 h-2 rounded-full ${isPlaying || isAudioGenerating ? 'bg-editorial animate-pulse' : 'bg-ink/20'}`} />
                  <div className="flex-1 overflow-hidden">
                     <p className="font-mono text-[9px] uppercase font-black tracking-widest truncate">
-                      {isPlaying ? 'Live Synthesis' : isGenerating ? 'Script Generation' : 'Buffer Ready'}
+                      {isAudioGenerating ? 'Synthesizing Audio' : isPlaying ? 'Live Playback' : isGenerating ? 'Scripting' : 'System Ready'}
                     </p>
                     <p className="font-display text-[10px] truncate italic">
                       {paper.title}
@@ -497,82 +463,111 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
               </div>
             </div>
 
-            {/* Transport Controls */}
             <div className="space-y-6">
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between font-mono text-[10px] uppercase font-black tracking-widest">
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{formatTime(totalDuration)}</span>
+              {!isAudioReady && !isAudioGenerating && (
+                <button 
+                  onClick={startSynthesis}
+                  disabled={isGenerating || !isWorkerReady}
+                  className="w-full py-6 border-4 border-ink bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all disabled:opacity-30 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-2 active:translate-y-2 flex flex-col items-center gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 size={32} className="animate-spin" />
+                      <span className="font-display font-black uppercase text-xl">Waiting for Script...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Headphones size={32} />
+                      <span className="font-display font-black uppercase text-xl">Generate Audio</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {isAudioGenerating && (
+                <div className="w-full py-8 border-4 border-ink bg-paper flex flex-col items-center gap-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                  <Loader2 size={48} className="animate-spin text-editorial" />
+                  <div className="text-center">
+                    <p className="font-display font-black uppercase text-xl text-ink">Synthesizing</p>
+                    <p className="font-mono text-[10px] text-ink/40 uppercase tracking-widest">Transforming text to voice</p>
+                  </div>
                 </div>
-                <div className="h-4 border-2 border-ink bg-paper relative overflow-hidden group cursor-pointer">
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-editorial transition-all duration-300" 
-                    style={{ width: `${(currentTime / (totalDuration || 1)) * 100}%` }}
-                  />
+              )}
+
+              {isAudioReady && (
+                <div className="space-y-6 animate-in slide-in-from-bottom duration-500">
+                  <div className="space-y-2">
+                    <div className="flex justify-between font-mono text-[10px] uppercase font-black tracking-widest">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(totalDuration)}</span>
+                    </div>
+                    <div className="h-4 border-2 border-ink bg-paper relative overflow-hidden group cursor-pointer">
+                      <div 
+                        className="absolute inset-y-0 left-0 bg-editorial transition-all duration-300" 
+                        style={{ width: `${(currentTime / (totalDuration || 1)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-4">
+                    <button 
+                      onClick={() => {
+                        const prev = Math.max(0, curSegIdx - 1)
+                        stopAll()
+                        playSegment(prev)
+                      }}
+                      disabled={curSegIdx <= 0}
+                      className="p-4 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                    >
+                      <SkipBack size={20} />
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        if (isPlaying) pausePlayback()
+                        else {
+                          if (curSegIdx === -1) playSegment(0)
+                          else playSegment(curSegIdx, segOffsetRef.current)
+                        }
+                      }}
+                      className="p-6 border-4 border-ink bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                    >
+                      {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" />}
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        const next = Math.min(segments.length - 1, curSegIdx + 1)
+                        stopAll()
+                        playSegment(next)
+                      }}
+                      disabled={curSegIdx === -1 || curSegIdx >= segments.length - 1}
+                      className="p-4 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                    >
+                      <SkipForward size={20} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-4">
+                    <button 
+                      onClick={stopAll}
+                      className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-paper hover:bg-editorial hover:text-paper transition-all font-mono text-[10px] uppercase font-black tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                    >
+                      <Square size={14} fill="currentColor" />
+                      <span>Stop</span>
+                    </button>
+                    <button 
+                      onClick={() => { stopAll(); playSegment(0); }}
+                      className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all font-mono text-[10px] uppercase font-black tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                    >
+                      <RotateCcw size={14} />
+                      <span>Restart</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex items-center justify-center gap-4">
-                <button 
-                  onClick={() => {
-                    const prev = Math.max(0, curSegIdx - 1)
-                    stopAll()
-                    playSegment(prev)
-                  }}
-                  disabled={curSegIdx <= 0}
-                  className="p-4 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                >
-                  <SkipBack size={20} />
-                </button>
-
-                <button 
-                  onClick={() => {
-                    if (isPlaying) pausePlayback()
-                    else {
-                      if (curSegIdx === -1) playSegment(0)
-                      else playSegment(curSegIdx, segOffsetRef.current)
-                    }
-                  }}
-                  disabled={segments.every(s => s.status !== 'ready' && s.status !== 'done')}
-                  className="p-6 border-4 border-ink bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                >
-                  {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" />}
-                </button>
-
-                <button 
-                  onClick={() => {
-                    const next = Math.min(segments.length - 1, curSegIdx + 1)
-                    stopAll()
-                    playSegment(next)
-                  }}
-                  disabled={curSegIdx === -1 || curSegIdx >= segments.length - 1}
-                  className="p-4 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all disabled:opacity-30 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                >
-                  <SkipForward size={20} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-center gap-4">
-                <button 
-                  onClick={stopAll}
-                  className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-paper hover:bg-editorial hover:text-paper transition-all font-mono text-[10px] uppercase font-black tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                >
-                  <Square size={14} fill="currentColor" />
-                  <span>Stop</span>
-                </button>
-                <button 
-                  onClick={() => { stopAll(); playSegment(0); }}
-                  className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-paper hover:bg-ink hover:text-paper transition-all font-mono text-[10px] uppercase font-black tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                >
-                  <RotateCcw size={14} />
-                  <span>Restart</span>
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* Settings */}
             <div className="border-t-2 border-ink pt-8 space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -581,8 +576,12 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
                 </div>
                 <select 
                   value={voice}
-                  onChange={(e) => setVoice(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink p-3 font-mono text-xs focus:ring-2 focus:ring-editorial outline-none"
+                  onChange={(e) => {
+                    setVoice(e.target.value)
+                    setIsAudioReady(false) // Require re-synthesis if voice changes
+                  }}
+                  disabled={isAudioGenerating}
+                  className="w-full bg-paper border-2 border-ink p-3 font-mono text-xs focus:ring-2 focus:ring-editorial outline-none disabled:opacity-50"
                 >
                   {VOICES.map(v => (
                     <option key={v.id} value={v.id}>{v.name}</option>
@@ -604,8 +603,12 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
                   max="2.0" 
                   step="0.1" 
                   value={speed}
-                  onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                  className="w-full accent-editorial"
+                  onChange={(e) => {
+                    setSpeed(parseFloat(e.target.value))
+                    setIsAudioReady(false) // Require re-synthesis if speed changes (Kokoro bakes speed into audio)
+                  }}
+                  disabled={isAudioGenerating}
+                  className="w-full accent-editorial disabled:opacity-50"
                 />
               </div>
 
@@ -617,10 +620,10 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
                  </div>
                  <div className="p-4 border-2 border-ink bg-paper text-center">
                     <div className="mx-auto mb-2 flex items-center justify-center h-5">
-                       {loadingModel ? <Loader2 size={16} className="animate-spin text-editorial" /> : <div className="w-4 h-4 rounded-full bg-green-600" />}
+                       {(!isWorkerReady || isAudioGenerating) ? <Loader2 size={16} className="animate-spin text-editorial" /> : <div className="w-4 h-4 rounded-full bg-green-600" />}
                     </div>
                     <p className="font-mono text-[8px] uppercase text-ink/40 mb-1">Pipeline Status</p>
-                    <p className="font-mono text-[10px] font-black uppercase">{loadingModel ? 'Active' : 'Standby'}</p>
+                    <p className="font-mono text-[10px] font-black uppercase">{isWorkerReady ? 'Ready' : 'Standby'}</p>
                  </div>
               </div>
             </div>

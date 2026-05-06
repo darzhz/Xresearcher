@@ -26,7 +26,7 @@ A privacy-centric, local-first Progressive Web App (PWA) that transforms arXiv r
 - `src/hooks/`: Custom React hooks for domain-specific logic (`useLLM`, `useOPFS`, `useLibrary`).
 - `src/lib/`: Core logic and utilities (LLM engine, paper storage, ar5iv fetching).
 - `src/types/`: Centralized TypeScript interface definitions.
-- `src/workers/`: Web Workers for background tasks (e.g., `llm.worker.ts`).
+- `src/workers/`: Web Workers for background tasks (e.g., `llm.worker.ts`, `tts.worker.ts`).
 
 ## 🛠 Critical Commands
 | Command | Action |
