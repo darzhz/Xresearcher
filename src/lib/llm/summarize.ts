@@ -241,18 +241,25 @@ export async function generatePodcastScript(
     .map(s => s.full_text || s.content)
     .join('\n\n')
 
-  const dense = extractDenseText(boostedText, 1000) // ~4k chars budget for faster prefill
+  // Use more context (2000 tokens ~8k chars) for better quality
+  const dense = extractDenseText(boostedText, 2000)
   
   onProgress?.(20, 'Generating script…')
 
 const prompt = [
   {
     role: 'system',
-    content: `You are a compelling science storyteller and podcast host who specializes in making complex research feel intuitive, exciting, and easy to follow. You prioritize curiosity, clarity, and narrative flow over dry summarization.`
+    content: `You are a compelling science storyteller and podcast host who specializes in making complex research feel intuitive, exciting, and easy to follow. You prioritize curiosity, clarity, and narrative flow over dry summarization.
+
+CRITICAL RULES:
+- Write complete, grammatically correct sentences
+- Never repeat the same phrase or word multiple times
+- Never generate nonsense or garbled text
+- Stay coherent and logical throughout`
   },
   {
     role: 'user',
-    content: `Turn the following research paper into a 1-minute podcast script for a single narrator.
+    content: `Turn the following research paper into a podcast script for a single narrator.
 
 GOAL:
 Make the listener feel curious within the first 5 seconds, understand the core idea without technical background, and walk away feeling like they learned something meaningful.
@@ -273,11 +280,9 @@ STYLE GUIDELINES:
 - Use short, punchy sentences where possible.
 - Prefer storytelling over listing facts.
 - No bullet points, no headings—pure spoken script.
+- Write 250-350 words for a good 1-2 minute script
 
-CONSTRAINTS:
-- Under 200 words
-- Single narrator voice
-- Natural pacing for audio
+IMPORTANT: Write carefully and coherently. Avoid repetition. Make every sentence count.
 
 PAPER CONTENT:
 ${dense}`
@@ -287,7 +292,10 @@ ${dense}`
 const { result, metrics } = await inferStream(
   prompt,
   token => onToken?.(token),
-  { maxTokens: 400, temperature: 0.8 }
+  { 
+    maxTokens: 600, 
+    temperature: 0.5
+  }
 )
 
   onProgress?.(100, 'Done')

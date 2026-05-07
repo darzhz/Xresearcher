@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,11 +8,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#F9F9F7',
-        ink: '#111111',
-        divider: '#E5E5E0',
-        editorial: '#CC0000',
-        paper: '#F9F9F7',
+        background: 'var(--background)',
+        ink: 'var(--ink)',
+        divider: 'var(--divider)',
+        editorial: 'var(--editorial)',
+        paper: 'var(--paper)',
       },
       fontFamily: {
         display: ['Playfair Display', 'serif'],
