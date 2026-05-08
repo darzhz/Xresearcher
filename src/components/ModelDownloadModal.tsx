@@ -96,11 +96,11 @@ export function ModelDownloadModal({
               <div className="space-y-3">
                 {MODELS.map((model) => (
                   <button
-                    key={model.id}
+                    key={model.repoId}
                     onClick={() => onDownload(model)}
-                    disabled={currentModel?.id === model.id}
+                    disabled={currentModel?.repoId === model.repoId}
                     className={`w-full group relative p-4 border-2 border-ink text-left transition-all ${
-                      currentModel?.id === model.id 
+                      currentModel?.repoId === model.repoId 
                         ? 'bg-ink text-paper' 
                         : 'bg-paper hover:bg-neutral-50 hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_var(--ink)]'
                     }`}
@@ -109,13 +109,13 @@ export function ModelDownloadModal({
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <p className="font-mono text-xs font-black uppercase tracking-tight">{model.label}</p>
-                          {currentModel?.id === model.id && (
+                          {currentModel?.repoId === model.repoId && (
                             <span className="text-[8px] font-mono uppercase px-1 bg-editorial text-paper">Active</span>
                           )}
                         </div>
-                        <p className="text-[9px] font-mono text-ink/50 uppercase">{model.size} • {model.id}</p>
+                        <p className="text-[9px] font-mono text-ink/50 uppercase">{model.sizeGB}GB • {model.repoId}</p>
                       </div>
-                      <Download size={14} className={currentModel?.id === model.id ? 'text-editorial' : 'text-ink/20'} />
+                      <Download size={14} className={currentModel?.repoId === model.repoId ? 'text-editorial' : 'text-ink/20'} />
                     </div>
                   </button>
                 ))}
