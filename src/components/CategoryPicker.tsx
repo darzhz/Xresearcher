@@ -38,7 +38,7 @@ export function CategoryPicker({
 
   return (
     <div className="fixed inset-0 bg-ink/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-paper border-4 border-ink max-w-2xl w-full shadow-[8px_8px_0px_0px_var(--ink)] relative max-h-[90vh] flex flex-col">
+      <div className="bg-paper border-4 border-ink max-w-2xl w-full shadow-[8px_8px_0px_0px_#111111] relative max-h-[90vh] flex flex-col">
         
         {/* FIXED HEADER */}
         <div className="p-8 pb-4 border-b-2 border-ink bg-paper z-10">
@@ -66,7 +66,7 @@ export function CategoryPicker({
                 <label
                   key={cat}
                   className={`flex items-center p-4 cursor-pointer transition-colors ${
-                    selectedCategories.includes(cat) ? 'bg-ink text-paper' : 'bg-paper hover:bg-neutral-50 dark:hover:bg-ink/5'
+                    selectedCategories.includes(cat) ? 'bg-ink text-paper' : 'bg-paper hover:bg-neutral-50'
                   }`}
                 >
                   <input
@@ -98,7 +98,7 @@ export function CategoryPicker({
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAddCustom()}
-                className="flex-1 px-4 py-3 border-b-2 border-ink bg-transparent font-mono text-sm focus:outline-none focus:bg-ink/5 transition-colors"
+                className="flex-1 px-4 py-3 border-b-2 border-ink bg-transparent font-mono text-sm focus:outline-none focus:bg-neutral-50 transition-colors"
               />
               <button
                 onClick={handleAddCustom}
@@ -121,7 +121,7 @@ export function CategoryPicker({
                 {selectedCategories.map(cat => (
                   <span
                     key={cat}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 border border-ink bg-ink/5 font-mono text-[10px] uppercase font-black tracking-tight"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 border border-ink bg-neutral-50 font-mono text-[10px] uppercase font-black tracking-tight"
                   >
                     <Hash size={10} className="text-editorial" />
                     {cat}

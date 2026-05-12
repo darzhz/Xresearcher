@@ -466,7 +466,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
 
         {/* Settings Overlay */}
         {showSettings && (
-          <div className="absolute inset-x-4 top-20 bg-paper z-40 border-4 border-ink shadow-[8px_8px_0px_0px_var(--ink)] p-6 space-y-6 animate-in zoom-in-95 duration-200">
+          <div className="absolute inset-x-4 top-20 bg-paper z-40 border-4 border-ink shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 space-y-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center border-b-2 border-ink pb-4">
               <h4 className="font-mono text-[10px] uppercase font-black tracking-widest">Player Settings</h4>
               <button onClick={() => setShowSettings(false)}><X size={20} /></button>
@@ -551,7 +551,7 @@ export function PodcastView({ paper, script, onClose, isGenerating }: PodcastVie
                   }
                 }}
                 disabled={!isAudioReady && !isPlaying}
-                className="w-20 h-20 rounded-full border-4 border-ink flex items-center justify-center bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all active:scale-95 disabled:opacity-20 shadow-[6px_6px_0px_0px_var(--ink)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                className="w-20 h-20 rounded-full border-4 border-ink flex items-center justify-center bg-ink text-paper hover:bg-editorial hover:border-editorial transition-all active:scale-95 disabled:opacity-20 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
               >
                 {isPlaying ? <Pause size={40} fill="currentColor" /> : <Play size={40} className="ml-2" fill="currentColor" />}
               </button>

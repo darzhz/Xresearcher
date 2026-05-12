@@ -42,7 +42,7 @@ self.onmessage = async (event: MessageEvent<MessageData>) => {
       
       self.postMessage({ type: 'status', message: `Loading Kokoro-82M (${device?.toUpperCase()})...` })
       
-      tts = await KokoroTTS.from_pretrained('NeuML/kokoro-int8-onnx', {
+      tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
         device,
         dtype,
       })

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader, Search, Bookmark, BookmarkCheck, Sun, Moon } from 'lucide-react'
+import { ArrowLeft, Inbox, BookOpen, Newspaper, Loader, Search, Bookmark, BookmarkCheck } from 'lucide-react'
 import type { AppView } from '../types'
-import { useDarkMode } from '../hooks/useDarkMode'
 
 interface NavBarProps {
   activeTab: Exclude<AppView, 'reader'>
@@ -24,7 +23,6 @@ export function NavBar({
 }: NavBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -72,16 +70,7 @@ export function NavBar({
             <span className="hidden sm:inline">Statistical Inference Driven Research Intelligence</span>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <span>{today}</span>
-          <button 
-            onClick={toggleDarkMode}
-            className="p-1 hover:text-editorial transition-colors"
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {isDarkMode ? <Sun size={12} /> : <Moon size={12} />}
-          </button>
-        </div>
+        <span>{today}</span>
       </div>
 
       <div className={`w-full px-4 sm:px-6 lg:px-8 transition-all duration-300 ${isScrolled ? 'py-2' : 'py-6'}`}>
@@ -178,3 +167,4 @@ export function NavBar({
     </header>
   )
 }
+
